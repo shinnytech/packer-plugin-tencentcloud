@@ -6,7 +6,6 @@ package cvm
 import (
 	"context"
 	"fmt"
-
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
 )
@@ -32,8 +31,9 @@ func (s *stepPreValidate) Run(ctx context.Context, state multistep.StateBag) mul
 			if err != nil {
 				return Halt(state, err, "Failed to delete image requestID: "+requestID)
 			}
+		} else {
+			return Halt(state, fmt.Errorf("Image name %s has exists", config.ImageName), "")
 		}
-		return Halt(state, fmt.Errorf("Image name %s has exists", config.ImageName), "")
 	}
 
 	Message(state, "useable", "Image name")
