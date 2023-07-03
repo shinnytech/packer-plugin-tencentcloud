@@ -91,7 +91,8 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 	var steps []multistep.Step
 	steps = []multistep.Step{
 		&stepPreValidate{
-			ForceDelete: b.config.ImageForceDelete,
+			ForceDelete:  b.config.ImageForceDelete,
+			SkipIfExists: b.config.SkipIfExists,
 		},
 		&stepCheckSourceImage{
 			b.config.SourceImageId,
@@ -160,6 +161,10 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 	b.runner.Run(ctx, state)
 
 	if rawErr, ok := state.GetOk("error"); ok {
+		if b.config.SkipIfExists && rawErr.(error) == fmt.Errorf("Image name %s has exists", b.config.ImageName) {
+			Say(state, "Image exists, Skipping...", "")
+			return nil, nil
+		}
 		return nil, rawErr.(error)
 	}
 

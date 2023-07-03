@@ -11,7 +11,8 @@ import (
 )
 
 type stepPreValidate struct {
-	ForceDelete bool
+	ForceDelete  bool
+	SkipIfExists bool
 }
 
 func (s *stepPreValidate) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
