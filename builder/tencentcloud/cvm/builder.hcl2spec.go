@@ -31,6 +31,7 @@ type FlatConfig struct {
 	ForcePoweroff             *bool                      `mapstructure:"force_poweroff" required:"false" cty:"force_poweroff" hcl:"force_poweroff"`
 	Sysprep                   *bool                      `mapstructure:"sysprep" required:"false" cty:"sysprep" hcl:"sysprep"`
 	ImageForceDelete          *bool                      `mapstructure:"image_force_delete" cty:"image_force_delete" hcl:"image_force_delete"`
+	SkipIfExists              *bool                      `mapstructure:"skip_if_exists" cty:"skip_if_exists" hcl:"skip_if_exists"`
 	ImageCopyRegions          []string                   `mapstructure:"image_copy_regions" required:"false" cty:"image_copy_regions" hcl:"image_copy_regions"`
 	ImageShareAccounts        []string                   `mapstructure:"image_share_accounts" required:"false" cty:"image_share_accounts" hcl:"image_share_accounts"`
 	ImageTags                 map[string]string          `mapstructure:"image_tags" required:"false" cty:"image_tags" hcl:"image_tags"`
@@ -145,6 +146,7 @@ func (*FlatConfig) HCL2Spec() map[string]hcldec.Spec {
 		"force_poweroff":               &hcldec.AttrSpec{Name: "force_poweroff", Type: cty.Bool, Required: false},
 		"sysprep":                      &hcldec.AttrSpec{Name: "sysprep", Type: cty.Bool, Required: false},
 		"image_force_delete":           &hcldec.AttrSpec{Name: "image_force_delete", Type: cty.Bool, Required: false},
+		"skip_if_exists":               &hcldec.AttrSpec{Name: "skip_if_exists", Type: cty.Bool, Required: false},
 		"image_copy_regions":           &hcldec.AttrSpec{Name: "image_copy_regions", Type: cty.List(cty.String), Required: false},
 		"image_share_accounts":         &hcldec.AttrSpec{Name: "image_share_accounts", Type: cty.List(cty.String), Required: false},
 		"image_tags":                   &hcldec.AttrSpec{Name: "image_tags", Type: cty.Map(cty.String), Required: false},
