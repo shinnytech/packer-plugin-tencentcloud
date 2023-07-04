@@ -15,6 +15,8 @@ type stepPreValidate struct {
 	SkipIfExists bool
 }
 
+var ImageExistsError = fmt.Errorf("Image name has exists")
+
 func (s *stepPreValidate) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
 	config := state.Get("config").(*Config)
 	client := state.Get("cvm_client").(*cvm.Client)
@@ -33,7 +35,7 @@ func (s *stepPreValidate) Run(ctx context.Context, state multistep.StateBag) mul
 				return Halt(state, err, "Failed to delete image requestID: "+requestID)
 			}
 		} else {
-			return Halt(state, fmt.Errorf("Image name %s has exists", config.ImageName), "")
+			return Halt(state, ImageExistsError, "")
 		}
 	}
 

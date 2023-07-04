@@ -3,7 +3,10 @@
 
 package cvm
 
-import "testing"
+import (
+	"github.com/hashicorp/packer-plugin-sdk/multistep"
+	"testing"
+)
 
 func TestTencentCloudImageConfig_Prepare(t *testing.T) {
 	cf := &TencentCloudImageConfig{
@@ -40,5 +43,15 @@ func TestTencentCloudImageConfig_Prepare(t *testing.T) {
 	}
 	if err := cf.Prepare(nil); err != nil {
 		t.Fatalf("shouldn't have err:%v", err)
+	}
+}
+
+func TestSkipIfExists(t *testing.T) {
+	state := new(multistep.BasicStateBag)
+	state.Put("error", ImageExistsError)
+	if rawErr, ok := state.GetOk("error"); ok {
+		if rawErr.(error) != ImageExistsError {
+			t.Fatalf("shouldn't have err:%v", rawErr.(error))
+		}
 	}
 }

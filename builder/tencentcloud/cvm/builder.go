@@ -8,6 +8,7 @@ package cvm
 import (
 	"context"
 	"fmt"
+	"github.com/pkg/errors"
 
 	"github.com/hashicorp/hcl/v2/hcldec"
 	"github.com/hashicorp/packer-plugin-sdk/common"
@@ -161,7 +162,7 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 	b.runner.Run(ctx, state)
 
 	if rawErr, ok := state.GetOk("error"); ok {
-		if b.config.SkipIfExists && rawErr.(error) == fmt.Errorf("Image name %s has exists", b.config.ImageName) {
+		if b.config.SkipIfExists && errors.Is(rawErr.(error), ImageExistsError) {
 			Say(state, "Image exists, Skipping...", "")
 			return nil, nil
 		}
