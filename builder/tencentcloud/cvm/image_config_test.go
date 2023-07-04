@@ -4,8 +4,9 @@
 package cvm
 
 import (
-	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	"testing"
+
+	"github.com/hashicorp/packer-plugin-sdk/multistep"
 )
 
 func TestTencentCloudImageConfig_Prepare(t *testing.T) {
