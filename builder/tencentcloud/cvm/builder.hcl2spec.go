@@ -31,11 +31,10 @@ type FlatConfig struct {
 	ForcePoweroff             *bool                      `mapstructure:"force_poweroff" required:"false" cty:"force_poweroff" hcl:"force_poweroff"`
 	Sysprep                   *bool                      `mapstructure:"sysprep" required:"false" cty:"sysprep" hcl:"sysprep"`
 	ImageForceDelete          *bool                      `mapstructure:"image_force_delete" cty:"image_force_delete" hcl:"image_force_delete"`
-	SkipIfExists              *bool                      `mapstructure:"skip_if_exists" cty:"skip_if_exists" hcl:"skip_if_exists"`
-	SkipCreateImage           *bool                      `mapstructure:"skip_create_image" cty:"skip_create_image" hcl:"skip_create_image"`
 	ImageCopyRegions          []string                   `mapstructure:"image_copy_regions" required:"false" cty:"image_copy_regions" hcl:"image_copy_regions"`
 	ImageShareAccounts        []string                   `mapstructure:"image_share_accounts" required:"false" cty:"image_share_accounts" hcl:"image_share_accounts"`
 	ImageTags                 map[string]string          `mapstructure:"image_tags" required:"false" cty:"image_tags" hcl:"image_tags"`
+	SkipIfExists              *bool                      `mapstructure:"skip_if_exists" required:"false" cty:"skip_if_exists" hcl:"skip_if_exists"`
 	AssociatePublicIpAddress  *bool                      `mapstructure:"associate_public_ip_address" required:"false" cty:"associate_public_ip_address" hcl:"associate_public_ip_address"`
 	SourceImageId             *string                    `mapstructure:"source_image_id" required:"false" cty:"source_image_id" hcl:"source_image_id"`
 	SourceImageName           *string                    `mapstructure:"source_image_name" required:"false" cty:"source_image_name" hcl:"source_image_name"`
@@ -112,6 +111,7 @@ type FlatConfig struct {
 	WinRMInsecure             *bool                      `mapstructure:"winrm_insecure" cty:"winrm_insecure" hcl:"winrm_insecure"`
 	WinRMUseNTLM              *bool                      `mapstructure:"winrm_use_ntlm" cty:"winrm_use_ntlm" hcl:"winrm_use_ntlm"`
 	SSHPrivateIp              *bool                      `mapstructure:"ssh_private_ip" cty:"ssh_private_ip" hcl:"ssh_private_ip"`
+	SkipCreateImage           *bool                      `mapstructure:"skip_create_image" required:"false" cty:"skip_create_image" hcl:"skip_create_image"`
 	SkipRegionValidation      *bool                      `mapstructure:"skip_region_validation" required:"false" cty:"skip_region_validation" hcl:"skip_region_validation"`
 }
 
@@ -147,11 +147,10 @@ func (*FlatConfig) HCL2Spec() map[string]hcldec.Spec {
 		"force_poweroff":               &hcldec.AttrSpec{Name: "force_poweroff", Type: cty.Bool, Required: false},
 		"sysprep":                      &hcldec.AttrSpec{Name: "sysprep", Type: cty.Bool, Required: false},
 		"image_force_delete":           &hcldec.AttrSpec{Name: "image_force_delete", Type: cty.Bool, Required: false},
-		"skip_if_exists":               &hcldec.AttrSpec{Name: "skip_if_exists", Type: cty.Bool, Required: false},
-		"skip_create_image":            &hcldec.AttrSpec{Name: "skip_create_image", Type: cty.Bool, Required: false},
 		"image_copy_regions":           &hcldec.AttrSpec{Name: "image_copy_regions", Type: cty.List(cty.String), Required: false},
 		"image_share_accounts":         &hcldec.AttrSpec{Name: "image_share_accounts", Type: cty.List(cty.String), Required: false},
 		"image_tags":                   &hcldec.AttrSpec{Name: "image_tags", Type: cty.Map(cty.String), Required: false},
+		"skip_if_exists":               &hcldec.AttrSpec{Name: "skip_if_exists", Type: cty.Bool, Required: false},
 		"associate_public_ip_address":  &hcldec.AttrSpec{Name: "associate_public_ip_address", Type: cty.Bool, Required: false},
 		"source_image_id":              &hcldec.AttrSpec{Name: "source_image_id", Type: cty.String, Required: false},
 		"source_image_name":            &hcldec.AttrSpec{Name: "source_image_name", Type: cty.String, Required: false},
@@ -228,6 +227,7 @@ func (*FlatConfig) HCL2Spec() map[string]hcldec.Spec {
 		"winrm_insecure":               &hcldec.AttrSpec{Name: "winrm_insecure", Type: cty.Bool, Required: false},
 		"winrm_use_ntlm":               &hcldec.AttrSpec{Name: "winrm_use_ntlm", Type: cty.Bool, Required: false},
 		"ssh_private_ip":               &hcldec.AttrSpec{Name: "ssh_private_ip", Type: cty.Bool, Required: false},
+		"skip_create_image":            &hcldec.AttrSpec{Name: "skip_create_image", Type: cty.Bool, Required: false},
 		"skip_region_validation":       &hcldec.AttrSpec{Name: "skip_region_validation", Type: cty.Bool, Required: false},
 	}
 	return s
