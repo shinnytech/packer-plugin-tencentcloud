@@ -149,14 +149,19 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 		// We need this step to detach keypair from instance, otherwise
 		// it always fails to delete the key.
 		&stepDetachTempKeyPair{},
-		&stepCreateImage{},
-		&stepShareImage{
-			b.config.ImageShareAccounts,
-		},
-		&stepCopyImage{
-			DesinationRegions: b.config.ImageCopyRegions,
-			SourceRegion:      b.config.Region,
-		},
+	}
+
+	if !b.config.SkipCreateImage {
+		steps = append(steps,
+			&stepCreateImage{},
+			&stepShareImage{
+				b.config.ImageShareAccounts,
+			},
+			&stepCopyImage{
+				DesinationRegions: b.config.ImageCopyRegions,
+				SourceRegion:      b.config.Region,
+			},
+		)
 	}
 
 	b.runner = commonsteps.NewRunner(steps, b.config.PackerConfig, ui)

@@ -104,6 +104,8 @@ type TencentCloudRunConfig struct {
 	// Communicator settings
 	Comm         communicator.Config `mapstructure:",squash"`
 	SSHPrivateIp bool                `mapstructure:"ssh_private_ip"`
+	//If true, Packer will not create a final image. Defaults to `false`.
+	SkipCreateImage bool `mapstructure:"skip_create_image" required:"false"`
 }
 
 var ValidCBSType = []string{
