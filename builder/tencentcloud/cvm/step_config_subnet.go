@@ -6,6 +6,8 @@ package cvm
 import (
 	"context"
 	"fmt"
+	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
+	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	vpc "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/vpc/v20170312"
@@ -21,13 +23,52 @@ type stepConfigSubnet struct {
 
 func (s *stepConfigSubnet) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
 	vpcClient := state.Get("vpc_client").(*vpc.Client)
+	cvmClient := state.Get("cvm_client").(*cvm.Client)
 
 	vpcId := state.Get("vpc_id").(string)
+	instanceType := state.Get("instance_type").(string)
+	if s.Zone == "" {
+		req := cvm.NewDescribeZoneInstanceConfigInfosRequest()
+		req.Filters = []*cvm.Filter{
+			{
+				Name:   common.StringPtr("instance-type"),
+				Values: common.StringPtrs([]string{instanceType}),
+			},
+		}
+		var resp *cvm.DescribeZoneInstanceConfigInfosResponse
+		err := Retry(ctx, func(ctx context.Context) error {
+			var e error
+			resp, e = cvmClient.DescribeZoneInstanceConfigInfos(req)
+			return e
+		})
+		if err != nil {
+			return Halt(state, err, "Failed to get available zones instance config")
+		}
+		if len(resp.Response.InstanceTypeQuotaSet) > 0 {
+			s.Zone = *resp.Response.InstanceTypeQuotaSet[0].Zone
+		} else {
+			Say(state, fmt.Sprintf("The instance type %s isn't available in this region."+
+				"\n You can change to other regions.", instanceType), "")
+			state.Put("error", fmt.Errorf("The instance type %s isn't available in this region."+
+				"\n You can change to other regions.", instanceType))
+			return multistep.ActionHalt
+		}
+	}
 
-	if len(s.SubnetId) != 0 {
+	if len(s.SubnetId) != 0 || len(s.SubnetName) != 0 {
 		Say(state, s.SubnetId, "Trying to use existing subnet")
 		req := vpc.NewDescribeSubnetsRequest()
 		req.SubnetIds = []*string{&s.SubnetId}
+		req.Filters = []*vpc.Filter{
+			{
+				Name:   common.StringPtr("subnet-name"),
+				Values: common.StringPtrs([]string{s.SubnetName}),
+			},
+			{
+				Name:   common.StringPtr("zone"),
+				Values: common.StringPtrs([]string{s.Zone}),
+			},
+		}
 		var resp *vpc.DescribeSubnetsResponse
 		err := Retry(ctx, func(ctx context.Context) error {
 			var e error
