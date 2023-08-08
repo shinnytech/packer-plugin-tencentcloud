@@ -60,16 +60,21 @@ func (s *stepConfigSubnet) Run(ctx context.Context, state multistep.StateBag) mu
 	if len(s.SubnetId) != 0 || len(s.SubnetName) != 0 {
 		Say(state, s.SubnetId, "Trying to use existing subnet")
 		req := vpc.NewDescribeSubnetsRequest()
-		req.SubnetIds = []*string{&s.SubnetId}
-		req.Filters = []*vpc.Filter{
-			{
-				Name:   common.StringPtr("subnet-name"),
-				Values: common.StringPtrs([]string{s.SubnetName}),
-			},
-			{
-				Name:   common.StringPtr("zone"),
-				Values: common.StringPtrs([]string{s.Zone}),
-			},
+		// 空字符串作为参数会报错
+		if len(s.SubnetId) != 0 {
+			req.SubnetIds = []*string{&s.SubnetId}
+		}
+		if len(s.SubnetName) != 0 {
+			req.Filters = []*vpc.Filter{
+				{
+					Name:   common.StringPtr("subnet-name"),
+					Values: common.StringPtrs([]string{s.SubnetName}),
+				},
+				{
+					Name:   common.StringPtr("zone"),
+					Values: common.StringPtrs([]string{s.Zone}),
+				},
+			}
 		}
 		var resp *vpc.DescribeSubnetsResponse
 		err := Retry(ctx, func(ctx context.Context) error {
