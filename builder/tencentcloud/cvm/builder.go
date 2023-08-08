@@ -84,6 +84,7 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 
 	state := new(multistep.BasicStateBag)
 	state.Put("config", &b.config)
+	state.Put("instance_type", b.config.InstanceType)
 	state.Put("cvm_client", cvmClient)
 	state.Put("vpc_client", vpcClient)
 	state.Put("hook", hook)
