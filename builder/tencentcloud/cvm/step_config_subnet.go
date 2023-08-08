@@ -27,6 +27,7 @@ func (s *stepConfigSubnet) Run(ctx context.Context, state multistep.StateBag) mu
 
 	vpcId := state.Get("vpc_id").(string)
 	instanceType := state.Get("instance_type").(string)
+	// 根据机型自动选择可用区
 	if s.Zone == "" {
 		req := cvm.NewDescribeZoneInstanceConfigInfosRequest()
 		req.Filters = []*cvm.Filter{
@@ -55,6 +56,7 @@ func (s *stepConfigSubnet) Run(ctx context.Context, state multistep.StateBag) mu
 		}
 	}
 
+	// 如果指定了子网ID或子网名称，则尝试使用已有子网
 	if len(s.SubnetId) != 0 || len(s.SubnetName) != 0 {
 		Say(state, s.SubnetId, "Trying to use existing subnet")
 		req := vpc.NewDescribeSubnetsRequest()

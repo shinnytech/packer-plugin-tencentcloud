@@ -141,7 +141,8 @@ func (cf *TencentCloudRunConfig) Prepare(ctx *interpolate.Context) []error {
 		}
 	}
 
-	if (cf.VpcId != "" || cf.CidrBlock != "") && cf.SubnetId == "" && cf.SubnectCidrBlock == "" {
+	// 添加SubnetName的判断，制定了SubnetName会自动搜索SubnetId
+	if (cf.VpcId != "" || cf.CidrBlock != "") && cf.SubnetId == "" && cf.SubnetName == "" && cf.SubnectCidrBlock == "" {
 		errs = append(errs, errors.New("if vpc cidr_block is specified, then "+
 			"subnet_cidr_block must also be specified."))
 	}
