@@ -229,6 +229,7 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 						if rawErr, ok := state.GetOk("error"); ok {
 							return Halt(state, rawErr.(error), fmt.Sprintf("Failed to run instance in zone %s", newZone))
 						}
+						s.instanceId = state.Get("instance_id").(string)
 						return multistep.ActionContinue
 					}
 				}
