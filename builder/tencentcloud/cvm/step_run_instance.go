@@ -9,6 +9,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"strings"
+
+	"github.com/hashicorp/packer-plugin-sdk/multistep/commonsteps"
+	"github.com/hashicorp/packer-plugin-sdk/packer"
+	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
+	tcerr "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/errors"
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
@@ -163,6 +169,69 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 		return e
 	})
 	if err != nil {
+		if e, ok := err.(*tcerr.TencentCloudSDKError); ok {
+			// 如果是资源不足，尝试获取可用的实例可用区
+			if e.Code == "ResourceInsufficient.SpecifiedInstanceType" && strings.Contains(e.Message, "The specified type of instance is understocked") {
+				hintReq := cvm.NewDescribeZoneInstanceConfigInfosRequest()
+				hintReq.Filters = []*cvm.Filter{
+					{
+						Name:   common.StringPtr("instance-type"),
+						Values: common.StringPtrs([]string{s.InstanceType}),
+					},
+					{
+						Name:   common.StringPtr("instance-charge-type"),
+						Values: common.StringPtrs([]string{"POSTPAID_BY_HOUR"}),
+					},
+				}
+
+				response, err := client.DescribeZoneInstanceConfigInfos(hintReq)
+				if _, ok := err.(*tcerr.TencentCloudSDKError); ok {
+					return Halt(state, err, "An API error has returned: %s")
+				}
+				if err != nil {
+					return Halt(state, err, "Failed to query instance available zones")
+				}
+				for _, instance := range response.Response.InstanceTypeQuotaSet {
+					// 在第一个可用区创建并继续
+					if *instance.Status == "SELL" {
+						newZone := *instance.Zone
+						Say(state, fmt.Sprintf("Instance type %s is available in zone %s, try to create instance in this zone", *instance.InstanceType, newZone), "Auto rearrange zone")
+						steps := []multistep.Step{
+							&stepConfigSubnet{
+								SubnetId:        config.SubnetId,
+								SubnetCidrBlock: config.SubnectCidrBlock,
+								SubnetName:      config.SubnetName,
+								Zone:            newZone,
+							},
+							&stepRunInstance{
+								InstanceType:             config.InstanceType,
+								InstanceChargeType:       config.InstanceChargeType,
+								UserData:                 config.UserData,
+								UserDataFile:             config.UserDataFile,
+								ZoneId:                   newZone,
+								InstanceName:             config.InstanceName,
+								DiskType:                 config.DiskType,
+								DiskSize:                 config.DiskSize,
+								DataDisks:                config.DataDisks,
+								HostName:                 config.HostName,
+								InternetChargeType:       config.InternetChargeType,
+								InternetMaxBandwidthOut:  config.InternetMaxBandwidthOut,
+								BandwidthPackageId:       config.BandwidthPackageId,
+								AssociatePublicIpAddress: config.AssociatePublicIpAddress,
+								Tags:                     config.RunTags,
+							},
+						}
+						runner := commonsteps.NewRunner(steps, config.PackerConfig, state.Get("ui").(packer.Ui))
+						runner.Run(ctx, state)
+						if rawErr, ok := state.GetOk("error"); ok {
+							return Halt(state, rawErr.(error), fmt.Sprintf("Failed to run instance in zone %s", newZone))
+						}
+						return multistep.ActionContinue
+					}
+				}
+
+			}
+		}
 		return Halt(state, err, "Failed to run instance")
 	}
 
