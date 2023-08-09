@@ -37,6 +37,7 @@ type stepRunInstance struct {
 	AssociatePublicIpAddress bool
 	Tags                     map[string]string
 	DataDisks                []tencentCloudDataDisk
+	NoCleanUp                bool
 }
 
 func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
@@ -219,6 +220,7 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 								BandwidthPackageId:       config.BandwidthPackageId,
 								AssociatePublicIpAddress: config.AssociatePublicIpAddress,
 								Tags:                     config.RunTags,
+								NoCleanUp:                true,
 							},
 						}
 						runner := commonsteps.NewRunner(steps, config.PackerConfig, state.Get("ui").(packer.Ui))
@@ -286,7 +288,7 @@ func (s *stepRunInstance) getUserData(state multistep.StateBag) (string, error) 
 }
 
 func (s *stepRunInstance) Cleanup(state multistep.StateBag) {
-	if s.instanceId == "" {
+	if s.instanceId == "" || s.NoCleanUp {
 		return
 	}
 
