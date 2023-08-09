@@ -20,6 +20,7 @@ import (
 	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
 )
 
+// 添加了跳过cleanup的功能
 type stepRunInstance struct {
 	InstanceType             string
 	InstanceChargeType       string
@@ -193,7 +194,7 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 					return Halt(state, err, "Failed to query instance available zones")
 				}
 				for _, instance := range response.Response.InstanceTypeQuotaSet {
-					// 在第一个可用区创建并继续
+					// 在第一个可用区创建并继续，并关闭新runner自动释放
 					if *instance.Status == "SELL" {
 						newZone := *instance.Zone
 						Say(state, fmt.Sprintf("Instance type %s is available in zone %s, try to create instance in this zone", *instance.InstanceType, newZone), "Auto rearrange zone")
@@ -288,6 +289,7 @@ func (s *stepRunInstance) getUserData(state multistep.StateBag) (string, error) 
 }
 
 func (s *stepRunInstance) Cleanup(state multistep.StateBag) {
+	// 当更换可用区时，不清理实例
 	if s.instanceId == "" || s.NoCleanUp {
 		return
 	}
