@@ -11,8 +11,6 @@ import (
 	"log"
 	"strings"
 
-	"github.com/hashicorp/packer-plugin-sdk/multistep/commonsteps"
-	"github.com/hashicorp/packer-plugin-sdk/packer"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	tcerr "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/errors"
 
@@ -197,35 +195,33 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 					// 在第一个可用区创建并继续，并关闭新runner自动释放
 					if *instance.Status == "SELL" {
 						newZone := *instance.Zone
-						Say(state, fmt.Sprintf("Instance type %s is available in zone %s, try to create instance in this zone", *instance.InstanceType, newZone), "Auto rearrange zone")
-						steps := []multistep.Step{
-							&stepConfigSubnet{
-								SubnetId:        config.SubnetId,
-								SubnetCidrBlock: config.SubnectCidrBlock,
-								SubnetName:      config.SubnetName,
-								Zone:            newZone,
-							},
-							&stepRunInstance{
-								InstanceType:             config.InstanceType,
-								InstanceChargeType:       config.InstanceChargeType,
-								UserData:                 config.UserData,
-								UserDataFile:             config.UserDataFile,
-								ZoneId:                   newZone,
-								InstanceName:             config.InstanceName,
-								DiskType:                 config.DiskType,
-								DiskSize:                 config.DiskSize,
-								DataDisks:                config.DataDisks,
-								HostName:                 config.HostName,
-								InternetChargeType:       config.InternetChargeType,
-								InternetMaxBandwidthOut:  config.InternetMaxBandwidthOut,
-								BandwidthPackageId:       config.BandwidthPackageId,
-								AssociatePublicIpAddress: config.AssociatePublicIpAddress,
-								Tags:                     config.RunTags,
-								NoCleanUp:                true,
-							},
+						Say(state, fmt.Sprintf("Instance type %s is not available in zone %s, try to use %s", s.InstanceType, newZone, s.ZoneId), "Auto re-arrange zone")
+						newSubnetStep := stepConfigSubnet{
+							SubnetId:        config.SubnetId,
+							SubnetCidrBlock: config.SubnectCidrBlock,
+							SubnetName:      config.SubnetName,
+							Zone:            newZone,
 						}
-						runner := commonsteps.NewRunner(steps, config.PackerConfig, state.Get("ui").(packer.Ui))
-						runner.Run(ctx, state)
+						newSubnetStep.Run(ctx, state)
+						newInstanceStep := stepRunInstance{
+							InstanceType:             config.InstanceType,
+							InstanceChargeType:       config.InstanceChargeType,
+							UserData:                 config.UserData,
+							UserDataFile:             config.UserDataFile,
+							ZoneId:                   newZone,
+							InstanceName:             config.InstanceName,
+							DiskType:                 config.DiskType,
+							DiskSize:                 config.DiskSize,
+							DataDisks:                config.DataDisks,
+							HostName:                 config.HostName,
+							InternetChargeType:       config.InternetChargeType,
+							InternetMaxBandwidthOut:  config.InternetMaxBandwidthOut,
+							BandwidthPackageId:       config.BandwidthPackageId,
+							AssociatePublicIpAddress: config.AssociatePublicIpAddress,
+							Tags:                     config.RunTags,
+							NoCleanUp:                true,
+						}
+						newInstanceStep.Run(ctx, state)
 						if rawErr, ok := state.GetOk("error"); ok {
 							return Halt(state, rawErr.(error), fmt.Sprintf("Failed to run instance in zone %s", newZone))
 						}
