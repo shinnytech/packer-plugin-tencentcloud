@@ -7,10 +7,11 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
-	tcerr "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/errors"
 	"io/ioutil"
 	"log"
+
+	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
+	tcerr "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/errors"
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
