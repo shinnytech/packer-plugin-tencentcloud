@@ -7,12 +7,10 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
-	"log"
-	"strings"
-
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	tcerr "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/errors"
+	"io/ioutil"
+	"log"
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
@@ -171,7 +169,7 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 	if err != nil {
 		if e, ok := err.(*tcerr.TencentCloudSDKError); ok {
 			// 如果是资源不足，尝试获取可用的实例可用区
-			if e.Code == "ResourceInsufficient.SpecifiedInstanceType" && strings.Contains(e.Message, "The specified type of instance is understocked") {
+			if e.Code == "ResourceInsufficient.SpecifiedInstanceType" || e.Code == "ResourceUnavailable.InstanceType" {
 				hintReq := cvm.NewDescribeZoneInstanceConfigInfosRequest()
 				hintReq.Filters = []*cvm.Filter{
 					{
