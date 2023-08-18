@@ -48,6 +48,7 @@ func (s *stepConfigSubnet) Run(ctx context.Context, state multistep.StateBag) mu
 		}
 		if len(resp.Response.InstanceTypeQuotaSet) > 0 {
 			s.Zone = *resp.Response.InstanceTypeQuotaSet[0].Zone
+			state.Put("zone", s.Zone)
 		} else {
 			Say(state, fmt.Sprintf("The instance type %s isn't available in this region."+
 				"\n You can change to other regions.", instanceType), "")
