@@ -86,16 +86,16 @@ func (cf *TencentCloudAccessConfig) Client() (*cvm.Client, *vpc.Client, error) {
 		return nil, nil, err
 	}
 
-	if cf.Zone == "" {
-		return nil, nil, fmt.Errorf("parameter zone must be set")
-	}
-
 	if cvm_client, err = NewCvmClient(cf.SecretId, cf.SecretKey, cf.Region, cf.CvmEndpoint); err != nil {
 		return nil, nil, err
 	}
 
 	if vpc_client, err = NewVpcClient(cf.SecretId, cf.SecretKey, cf.Region, cf.VpcEndpoint); err != nil {
 		return nil, nil, err
+	}
+
+	if cf.Zone == "" {
+		return cvm_client, vpc_client, nil
 	}
 
 	ctx := context.TODO()
