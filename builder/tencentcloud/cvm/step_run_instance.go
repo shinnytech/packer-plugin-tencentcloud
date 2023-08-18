@@ -65,6 +65,12 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 		req.Placement = &cvm.Placement{
 			Zone: &s.ZoneId,
 		}
+	} else if zone, ok := state.GetOk("zone"); ok {
+		req.Placement = &cvm.Placement{
+			Zone: common.StringPtr(zone.(string)),
+		}
+	} else {
+		return Halt(state, err, "Cannot get zone info when starting instance")
 	}
 	instanceChargeType := s.InstanceChargeType
 	if instanceChargeType == "" {
