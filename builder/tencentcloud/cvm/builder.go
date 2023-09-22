@@ -7,9 +7,8 @@ package cvm
 
 import (
 	"context"
+	"errors"
 	"fmt"
-
-	"github.com/pkg/errors"
 
 	"github.com/hashicorp/hcl/v2/hcldec"
 	"github.com/hashicorp/packer-plugin-sdk/common"
@@ -84,7 +83,6 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 
 	state := new(multistep.BasicStateBag)
 	state.Put("config", &b.config)
-	state.Put("instance_type", b.config.InstanceType)
 	state.Put("cvm_client", cvmClient)
 	state.Put("vpc_client", vpcClient)
 	state.Put("hook", hook)
@@ -105,28 +103,30 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 			Comm:         &b.config.Comm,
 			DebugKeyPath: fmt.Sprintf("cvm_%s.pem", b.config.PackerBuildName),
 		},
+		// 创建 VPC 或选择 VPC, 结果一定有且只有一个 VpcId
 		&stepConfigVPC{
 			VpcId:     b.config.VpcId,
 			CidrBlock: b.config.CidrBlock,
 			VpcName:   b.config.VpcName,
 		},
+		// 创建 subnet 或者选择 subnet 列表, 结果一定有 (subnet, zone) 列表
 		&stepConfigSubnet{
-			SubnetId:        b.config.SubnetId,
+			SubnetIds:       []string{b.config.SubnetId},
 			SubnetCidrBlock: b.config.SubnectCidrBlock,
 			SubnetName:      b.config.SubnetName,
-			Zone:            b.config.Zone,
+			Zones:           []string{b.config.Zone},
 		},
 		&stepConfigSecurityGroup{
 			SecurityGroupId:   b.config.SecurityGroupId,
 			SecurityGroupName: b.config.SecurityGroupName,
 			Description:       "securitygroup for packer",
 		},
+		// 遍历 subnet 列表, 尝试创建机器，直到创建成功或最终失败
 		&stepRunInstance{
 			InstanceType:             b.config.InstanceType,
 			InstanceChargeType:       b.config.InstanceChargeType,
 			UserData:                 b.config.UserData,
 			UserDataFile:             b.config.UserDataFile,
-			ZoneId:                   b.config.Zone,
 			InstanceName:             b.config.InstanceName,
 			DiskType:                 b.config.DiskType,
 			DiskSize:                 b.config.DiskSize,
@@ -137,7 +137,6 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 			BandwidthPackageId:       b.config.BandwidthPackageId,
 			AssociatePublicIpAddress: b.config.AssociatePublicIpAddress,
 			Tags:                     b.config.RunTags,
-			NoCleanUp:                false,
 		},
 		&communicator.StepConnect{
 			Config:    &b.config.TencentCloudRunConfig.Comm,
