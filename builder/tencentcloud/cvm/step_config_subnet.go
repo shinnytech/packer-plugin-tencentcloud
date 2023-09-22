@@ -15,10 +15,10 @@ import (
 )
 
 type stepConfigSubnet struct {
-	SubnetId        string
+	SubnetIds       []string // 可能会新建多个subnet
 	SubnetCidrBlock string
 	SubnetName      string
-	Zone            string
+	Zones           []string // 多个可用区内可能有相同的subnetName的subnet
 	isCreate        bool
 }
 
@@ -27,9 +27,9 @@ func (s *stepConfigSubnet) Run(ctx context.Context, state multistep.StateBag) mu
 	cvmClient := state.Get("cvm_client").(*cvm.Client)
 
 	vpcId := state.Get("vpc_id").(string)
-	instanceType := state.Get("instance_type").(string)
+	instanceType := state.Get("config").(TencentCloudRunConfig).InstanceType
 	// 根据机型自动选择可用区
-	if s.Zone == "" {
+	if s.Zones[0] == "" {
 		req := cvm.NewDescribeZoneInstanceConfigInfosRequest()
 		req.Filters = []*cvm.Filter{
 			{
@@ -47,8 +47,11 @@ func (s *stepConfigSubnet) Run(ctx context.Context, state multistep.StateBag) mu
 			return Halt(state, err, "Failed to get available zones instance config")
 		}
 		if len(resp.Response.InstanceTypeQuotaSet) > 0 {
-			s.Zone = *resp.Response.InstanceTypeQuotaSet[0].Zone
-			state.Put("zone", s.Zone)
+			zones := make([]string, 0)
+			for _, z := range resp.Response.InstanceTypeQuotaSet {
+				zones = append(zones, *z.Zone)
+			}
+			s.Zones = zones
 		} else {
 			Say(state, fmt.Sprintf("The instance type %s isn't available in this region."+
 				"\n You can change to other regions.", instanceType), "")
@@ -59,14 +62,15 @@ func (s *stepConfigSubnet) Run(ctx context.Context, state multistep.StateBag) mu
 	}
 
 	// 如果指定了子网ID或子网名称，则尝试使用已有子网
-	if len(s.SubnetId) != 0 || len(s.SubnetName) != 0 {
-		Say(state, s.SubnetId, "Trying to use existing subnet")
+	if len(s.SubnetIds) != 0 || len(s.SubnetName) != 0 {
+		Say(state, s.SubnetIds[0], "Trying to use existing subnet")
 		req := vpc.NewDescribeSubnetsRequest()
 		// 空字符串作为参数会报错
-		if len(s.SubnetId) != 0 {
-			req.SubnetIds = []*string{&s.SubnetId}
+		if len(s.SubnetIds) != 0 {
+			req.SubnetIds = []*string{&s.SubnetIds[0]}
 		}
 		if len(s.SubnetName) != 0 {
+			// 搜索机型在售所有可用区内符合subnet名称的subnet
 			req.Filters = []*vpc.Filter{
 				{
 					Name:   common.StringPtr("subnet-name"),
@@ -74,7 +78,7 @@ func (s *stepConfigSubnet) Run(ctx context.Context, state multistep.StateBag) mu
 				},
 				{
 					Name:   common.StringPtr("zone"),
-					Values: common.StringPtrs([]string{s.Zone}),
+					Values: common.StringPtrs(s.Zones),
 				},
 			}
 		}
@@ -89,38 +93,50 @@ func (s *stepConfigSubnet) Run(ctx context.Context, state multistep.StateBag) mu
 		}
 		if *resp.Response.TotalCount > 0 {
 			s.isCreate = false
-			if *resp.Response.SubnetSet[0].VpcId != vpcId {
-				return Halt(state, fmt.Errorf("The specified subnet(%s) does not belong to the specified vpc(%s)",
-					s.SubnetId, vpcId), "")
+			for _, subnet := range resp.Response.SubnetSet {
+				if *subnet.VpcId != vpcId {
+					return Halt(state, fmt.Errorf("the specified subnet(%s) does not belong to the specified vpc(%s)",
+						s.SubnetIds, vpcId), "")
+				}
 			}
-			state.Put("subnet_id", *resp.Response.SubnetSet[0].SubnetId)
-			Message(state, *resp.Response.SubnetSet[0].SubnetName, "Subnet found")
+			state.Put("subnets", resp.Response.SubnetSet)
+			Message(state, fmt.Sprintf("%d subnets in total.", *resp.Response.TotalCount), "Subnet found")
 			return multistep.ActionContinue
 		}
-		return Halt(state, fmt.Errorf("The specified subnet(%s) does not exist", s.SubnetId), "")
+		return Halt(state, fmt.Errorf("The specified subnet(%s) does not exist", s.SubnetIds), "")
 	}
 
+	// 遍历候选可用区，在对应可用区内创建subnet并将subnet收集起来便于后续销毁
 	Say(state, "Trying to create a new subnet", "")
-
-	req := vpc.NewCreateSubnetRequest()
-	req.VpcId = &vpcId
-	req.SubnetName = &s.SubnetName
-	req.CidrBlock = &s.SubnetCidrBlock
-	req.Zone = &s.Zone
-	var resp *vpc.CreateSubnetResponse
-	err := Retry(ctx, func(ctx context.Context) error {
-		var e error
-		resp, e = vpcClient.CreateSubnet(req)
-		return e
-	})
-	if err != nil {
-		return Halt(state, err, "Failed to create subnet")
-	}
-
 	s.isCreate = true
-	s.SubnetId = *resp.Response.Subnet.SubnetId
-	state.Put("subnet_id", s.SubnetId)
-	Message(state, s.SubnetId, "Subnet created")
+	subnets := make([]*vpc.Subnet, 0)
+	defer func() {
+		subnetIds := make([]string, 0)
+		for _, subnet := range subnets {
+			subnetIds = append(subnetIds, *subnet.SubnetId)
+		}
+		s.SubnetIds = subnetIds
+	}()
+	for _, zone := range s.Zones {
+		req := vpc.NewCreateSubnetRequest()
+		req.VpcId = &vpcId
+		req.SubnetName = &s.SubnetName
+		req.CidrBlock = &s.SubnetCidrBlock
+		req.Zone = &zone
+		var resp *vpc.CreateSubnetResponse
+		err := Retry(ctx, func(ctx context.Context) error {
+			var e error
+			resp, e = vpcClient.CreateSubnet(req)
+			return e
+		})
+		if err != nil {
+			return Halt(state, err, "Failed to create subnet")
+		}
+
+		subnets = append(subnets, resp.Response.Subnet)
+		Message(state, fmt.Sprintf("%d subnets in total.", len(s.SubnetIds)), "Subnet created")
+	}
+	state.Put("subnets", subnets)
 
 	return multistep.ActionContinue
 }
@@ -135,13 +151,15 @@ func (s *stepConfigSubnet) Cleanup(state multistep.StateBag) {
 
 	SayClean(state, "subnet")
 
-	req := vpc.NewDeleteSubnetRequest()
-	req.SubnetId = &s.SubnetId
-	err := Retry(ctx, func(ctx context.Context) error {
-		_, e := vpcClient.DeleteSubnet(req)
-		return e
-	})
-	if err != nil {
-		Error(state, err, fmt.Sprintf("Failed to delete subnet(%s), please delete it manually", s.SubnetId))
+	for _, id := range s.SubnetIds {
+		req := vpc.NewDeleteSubnetRequest()
+		req.SubnetId = &id
+		err := Retry(ctx, func(ctx context.Context) error {
+			_, e := vpcClient.DeleteSubnet(req)
+			return e
+		})
+		if err != nil {
+			Error(state, err, fmt.Sprintf("Failed to delete subnet(%s), please delete it manually", s.SubnetIds))
+		}
 	}
 }

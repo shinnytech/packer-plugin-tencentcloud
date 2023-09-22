@@ -7,24 +7,21 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
+	vpc "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/vpc/v20170312"
 	"log"
-
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
-	tcerr "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/errors"
+	"os"
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
 )
 
-// 添加了跳过cleanup的功能
+// 移除了zoneid，由subnet step生成的subnet信息提供
 type stepRunInstance struct {
 	InstanceType             string
 	InstanceChargeType       string
 	UserData                 string
 	UserDataFile             string
 	instanceId               string
-	ZoneId                   string
 	InstanceName             string
 	DiskType                 string
 	DiskSize                 int64
@@ -35,7 +32,6 @@ type stepRunInstance struct {
 	AssociatePublicIpAddress bool
 	Tags                     map[string]string
 	DataDisks                []tencentCloudDataDisk
-	NoCleanUp                bool
 }
 
 func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
@@ -44,7 +40,6 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 	config := state.Get("config").(*Config)
 	source_image := state.Get("source_image").(*cvm.Image)
 	vpc_id := state.Get("vpc_id").(string)
-	subnet_id := state.Get("subnet_id").(string)
 	security_group_id := state.Get("security_group_id").(string)
 
 	password := config.Comm.SSHPassword
@@ -61,17 +56,6 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 
 	// config RunInstances parameters
 	req := cvm.NewRunInstancesRequest()
-	if s.ZoneId != "" {
-		req.Placement = &cvm.Placement{
-			Zone: &s.ZoneId,
-		}
-	} else if zone, ok := state.GetOk("zone"); ok {
-		req.Placement = &cvm.Placement{
-			Zone: common.StringPtr(zone.(string)),
-		}
-	} else {
-		return Halt(state, err, "Cannot get zone info when starting instance")
-	}
 	instanceChargeType := s.InstanceChargeType
 	if instanceChargeType == "" {
 		instanceChargeType = "POSTPAID_BY_HOUR"
@@ -119,10 +103,6 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 		}
 		req.DataDisks = dataDisks
 	}
-	req.VirtualPrivateCloud = &cvm.VirtualPrivateCloud{
-		VpcId:    &vpc_id,
-		SubnetId: &subnet_id,
-	}
 	if s.AssociatePublicIpAddress {
 		req.InternetAccessible = &cvm.InternetAccessible{
 			PublicIpAssigned:        &s.AssociatePublicIpAddress,
@@ -166,82 +146,33 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 			},
 		}
 	}
-
-	var resp *cvm.RunInstancesResponse
-	err = Retry(ctx, func(ctx context.Context) error {
-		var e error
-		resp, e = client.RunInstances(req)
-		return e
-	})
-	if err != nil {
-		if e, ok := err.(*tcerr.TencentCloudSDKError); ok {
-			// 如果是资源不足，尝试获取可用的实例可用区
-			if e.Code == "ResourceInsufficient.SpecifiedInstanceType" || e.Code == "ResourceUnavailable.InstanceType" {
-				hintReq := cvm.NewDescribeZoneInstanceConfigInfosRequest()
-				hintReq.Filters = []*cvm.Filter{
-					{
-						Name:   common.StringPtr("instance-type"),
-						Values: common.StringPtrs([]string{s.InstanceType}),
-					},
-					{
-						Name:   common.StringPtr("instance-charge-type"),
-						Values: common.StringPtrs([]string{"POSTPAID_BY_HOUR"}),
-					},
-				}
-
-				response, err := client.DescribeZoneInstanceConfigInfos(hintReq)
-				if _, ok := err.(*tcerr.TencentCloudSDKError); ok {
-					return Halt(state, err, "An API error has returned: %s")
-				}
-				if err != nil {
-					return Halt(state, err, "Failed to query instance available zones")
-				}
-				for _, instance := range response.Response.InstanceTypeQuotaSet {
-					// 在第一个可用区创建并继续，并关闭新runner自动释放
-					if *instance.Status == "SELL" {
-						newZone := *instance.Zone
-						Say(state, fmt.Sprintf("Instance type %s is not available in zone %s, try to use %s", s.InstanceType, newZone, s.ZoneId), "Auto re-arrange zone")
-						newSubnetStep := stepConfigSubnet{
-							SubnetId:        config.SubnetId,
-							SubnetCidrBlock: config.SubnectCidrBlock,
-							SubnetName:      config.SubnetName,
-							Zone:            newZone,
-						}
-						newSubnetStep.Run(ctx, state)
-						newInstanceStep := stepRunInstance{
-							InstanceType:             config.InstanceType,
-							InstanceChargeType:       config.InstanceChargeType,
-							UserData:                 config.UserData,
-							UserDataFile:             config.UserDataFile,
-							ZoneId:                   newZone,
-							InstanceName:             config.InstanceName,
-							DiskType:                 config.DiskType,
-							DiskSize:                 config.DiskSize,
-							DataDisks:                config.DataDisks,
-							HostName:                 config.HostName,
-							InternetChargeType:       config.InternetChargeType,
-							InternetMaxBandwidthOut:  config.InternetMaxBandwidthOut,
-							BandwidthPackageId:       config.BandwidthPackageId,
-							AssociatePublicIpAddress: config.AssociatePublicIpAddress,
-							Tags:                     config.RunTags,
-							NoCleanUp:                true,
-						}
-						newInstanceStep.Run(ctx, state)
-						if rawErr, ok := state.GetOk("error"); ok {
-							return Halt(state, rawErr.(error), fmt.Sprintf("Failed to run instance in zone %s", newZone))
-						}
-						s.instanceId = state.Get("instance_id").(string)
-						return multistep.ActionContinue
-					}
-				}
-
-			}
-		}
-		return Halt(state, err, "Failed to run instance")
+	// 遍历subnet列表，依次尝试建立instance
+	subents, ok := state.GetOk("subnets")
+	if !ok {
+		Halt(state, fmt.Errorf("no subnets in state"), "Cannot get subnets info when starting instance")
 	}
+	var resp *cvm.RunInstancesResponse
+	for _, subnet := range subents.([]*vpc.Subnet) {
+		req.VirtualPrivateCloud = &cvm.VirtualPrivateCloud{
+			VpcId:    &vpc_id,
+			SubnetId: &(*subnet.SubnetId),
+		}
+		req.Placement = &cvm.Placement{
+			Zone: &(*subnet.Zone),
+		}
 
-	if len(resp.Response.InstanceIdSet) != 1 {
-		return Halt(state, fmt.Errorf("No instance return"), "Failed to run instance")
+		err = Retry(ctx, func(ctx context.Context) error {
+			var e error
+			resp, e = client.RunInstances(req)
+			return e
+		})
+		if err != nil {
+			return Halt(state, err, "Failed to run instance")
+		}
+
+		if len(resp.Response.InstanceIdSet) != 1 {
+			return Halt(state, fmt.Errorf("no instance return"), "Failed to run instance")
+		}
 	}
 
 	s.instanceId = *resp.Response.InstanceIdSet[0]
@@ -273,11 +204,11 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 	return multistep.ActionContinue
 }
 
-func (s *stepRunInstance) getUserData(state multistep.StateBag) (string, error) {
+func (s *stepRunInstance) getUserData(_ multistep.StateBag) (string, error) {
 	userData := s.UserData
 
 	if userData == "" && s.UserDataFile != "" {
-		data, err := ioutil.ReadFile(s.UserDataFile)
+		data, err := os.ReadFile(s.UserDataFile)
 		if err != nil {
 			return "", err
 		}
@@ -291,11 +222,6 @@ func (s *stepRunInstance) getUserData(state multistep.StateBag) (string, error) 
 }
 
 func (s *stepRunInstance) Cleanup(state multistep.StateBag) {
-	// 当更换可用区时，不清理实例
-	if s.instanceId == "" || s.NoCleanUp {
-		return
-	}
-
 	ctx := context.TODO()
 	client := state.Get("cvm_client").(*cvm.Client)
 
