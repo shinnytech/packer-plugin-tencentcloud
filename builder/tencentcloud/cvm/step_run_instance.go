@@ -154,6 +154,10 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 	}
 	var resp *cvm.RunInstancesResponse
 	for _, subnet := range subnets.([]*vpc.Subnet) {
+		Say(state,
+			fmt.Sprintf("instance-type: %s, subnet-id: %s, zone: %s",
+				s.InstanceType, *subnet.SubnetId, *subnet.Zone,
+			), "Try to create instance")
 		req.VirtualPrivateCloud = &cvm.VirtualPrivateCloud{
 			VpcId:    &vpc_id,
 			SubnetId: subnet.SubnetId,
@@ -168,8 +172,10 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 			return e
 		})
 		if err != nil {
-			// halt会返回终止信号，此处只需要记录日志，因此不需要return
-			Halt(state, err, "Failed to run instance")
+			// halt会返回终止信号并且记录error，存在error在state中会导致最终执行标记为失败
+			// 此处只需要记录日志，因此使用say
+			Say(state, fmt.Sprintf("%s", err), "Failed to run instance")
+			continue
 		}
 
 		if len(resp.Response.InstanceIdSet) != 1 {
