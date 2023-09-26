@@ -168,7 +168,8 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 			return e
 		})
 		if err != nil {
-			return Halt(state, err, "Failed to run instance")
+			// halt会返回终止信号，此处只需要记录日志，因此不需要return
+			Halt(state, err, "Failed to run instance")
 		}
 
 		if len(resp.Response.InstanceIdSet) != 1 {
