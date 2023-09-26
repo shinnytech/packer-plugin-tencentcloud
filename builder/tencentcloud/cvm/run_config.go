@@ -160,9 +160,6 @@ func (cf *TencentCloudRunConfig) Prepare(ctx *interpolate.Context) []error {
 	}
 
 	if cf.SubnetId == "" {
-		if cf.SubnetName == "" {
-			cf.SubnetName = packerId
-		}
 		if cf.SubnectCidrBlock == "" {
 			cf.SubnectCidrBlock = "10.0.8.0/24"
 		}

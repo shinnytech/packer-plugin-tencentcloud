@@ -6,6 +6,8 @@ package cvm
 import (
 	"context"
 	"fmt"
+	"github.com/hashicorp/packer-plugin-sdk/uuid"
+	"strings"
 
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
@@ -25,16 +27,21 @@ type stepConfigSubnet struct {
 func (s *stepConfigSubnet) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
 	vpcClient := state.Get("vpc_client").(*vpc.Client)
 	cvmClient := state.Get("cvm_client").(*cvm.Client)
-
 	vpcId := state.Get("vpc_id").(string)
-	instanceType := state.Get("config").(TencentCloudRunConfig).InstanceType
+	instanceType := state.Get("config").(*Config).InstanceType
+
 	// 根据机型自动选择可用区
 	if s.Zones[0] == "" {
+		Say(state, fmt.Sprintf("Try to get available zones for instance: %s", instanceType), "")
 		req := cvm.NewDescribeZoneInstanceConfigInfosRequest()
 		req.Filters = []*cvm.Filter{
 			{
 				Name:   common.StringPtr("instance-type"),
 				Values: common.StringPtrs([]string{instanceType}),
+			},
+			{
+				Name:   common.StringPtr("instance-charge-type"),
+				Values: common.StringPtrs([]string{"POSTPAID_BY_HOUR"}),
 			},
 		}
 		var resp *cvm.DescribeZoneInstanceConfigInfosResponse
@@ -48,10 +55,12 @@ func (s *stepConfigSubnet) Run(ctx context.Context, state multistep.StateBag) mu
 		}
 		if len(resp.Response.InstanceTypeQuotaSet) > 0 {
 			zones := make([]string, 0)
+			Say(state, fmt.Sprintf("length:%d", len(resp.Response.InstanceTypeQuotaSet)), "")
 			for _, z := range resp.Response.InstanceTypeQuotaSet {
 				zones = append(zones, *z.Zone)
 			}
 			s.Zones = zones
+			Say(state, fmt.Sprintf("Found zones: %s", strings.Join(s.Zones, ",")), "")
 		} else {
 			Say(state, fmt.Sprintf("The instance type %s isn't available in this region."+
 				"\n You can change to other regions.", instanceType), "")
@@ -62,14 +71,18 @@ func (s *stepConfigSubnet) Run(ctx context.Context, state multistep.StateBag) mu
 	}
 
 	// 如果指定了子网ID或子网名称，则尝试使用已有子网
-	if len(s.SubnetIds) != 0 || len(s.SubnetName) != 0 {
-		Say(state, s.SubnetIds[0], "Trying to use existing subnet")
+	if s.SubnetIds[0] != "" || len(s.SubnetName) != 0 {
+		Say(state, fmt.Sprintf("Trying to use existing subnet id: %s, name: %s", s.SubnetIds[0], s.SubnetName), "")
 		req := vpc.NewDescribeSubnetsRequest()
 		// 空字符串作为参数会报错
-		if len(s.SubnetIds) != 0 {
+		if s.SubnetIds[0] != "" {
 			req.SubnetIds = []*string{&s.SubnetIds[0]}
 		}
 		if len(s.SubnetName) != 0 {
+			// s.zones列表长度不能超过5,取最后五个
+			if len(s.Zones) > 5 {
+				s.Zones = s.Zones[len(s.Zones)-5:]
+			}
 			// 搜索机型在售所有可用区内符合subnet名称的subnet
 			req.Filters = []*vpc.Filter{
 				{
@@ -107,8 +120,11 @@ func (s *stepConfigSubnet) Run(ctx context.Context, state multistep.StateBag) mu
 	}
 
 	// 遍历候选可用区，在对应可用区内创建subnet并将subnet收集起来便于后续销毁
-	Say(state, "Trying to create a new subnet", "")
 	s.isCreate = true
+	if s.SubnetName == "" {
+		s.SubnetName = fmt.Sprintf("packer_%s", uuid.TimeOrderedUUID()[:8])
+	}
+	Say(state, s.SubnetName, "Trying to create a new subnet")
 	subnets := make([]*vpc.Subnet, 0)
 	defer func() {
 		subnetIds := make([]string, 0)
