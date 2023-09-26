@@ -147,12 +147,12 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 		}
 	}
 	// 遍历subnet列表，依次尝试建立instance
-	subents, ok := state.GetOk("subnets")
+	subnets, ok := state.GetOk("subnets")
 	if !ok {
 		Halt(state, fmt.Errorf("no subnets in state"), "Cannot get subnets info when starting instance")
 	}
 	var resp *cvm.RunInstancesResponse
-	for _, subnet := range subents.([]*vpc.Subnet) {
+	for _, subnet := range subnets.([]*vpc.Subnet) {
 		req.VirtualPrivateCloud = &cvm.VirtualPrivateCloud{
 			VpcId:    &vpc_id,
 			SubnetId: &(*subnet.SubnetId),
@@ -173,6 +173,9 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 		if len(resp.Response.InstanceIdSet) != 1 {
 			return Halt(state, fmt.Errorf("no instance return"), "Failed to run instance")
 		}
+	}
+	if resp == nil {
+		return Halt(state, fmt.Errorf("tried %d configurations but no luck", len(subnets.([]*vpc.Subnet))), "Failed to run instance")
 	}
 
 	s.instanceId = *resp.Response.InstanceIdSet[0]
@@ -222,6 +225,9 @@ func (s *stepRunInstance) getUserData(_ multistep.StateBag) (string, error) {
 }
 
 func (s *stepRunInstance) Cleanup(state multistep.StateBag) {
+	if s.instanceId == "" {
+		return
+	}
 	ctx := context.TODO()
 	client := state.Get("cvm_client").(*cvm.Client)
 
