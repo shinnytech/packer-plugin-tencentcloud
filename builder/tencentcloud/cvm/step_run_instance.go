@@ -7,9 +7,10 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	vpc "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/vpc/v20170312"
 	"log"
 	"os"
+
+	vpc "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/vpc/v20170312"
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
@@ -155,10 +156,10 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 	for _, subnet := range subnets.([]*vpc.Subnet) {
 		req.VirtualPrivateCloud = &cvm.VirtualPrivateCloud{
 			VpcId:    &vpc_id,
-			SubnetId: &(*subnet.SubnetId),
+			SubnetId: subnet.SubnetId,
 		}
 		req.Placement = &cvm.Placement{
-			Zone: &(*subnet.Zone),
+			Zone: subnet.Zone,
 		}
 
 		err = Retry(ctx, func(ctx context.Context) error {

@@ -6,8 +6,9 @@ package cvm
 import (
 	"context"
 	"fmt"
-	"github.com/hashicorp/packer-plugin-sdk/uuid"
 	"strings"
+
+	"github.com/hashicorp/packer-plugin-sdk/uuid"
 
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
