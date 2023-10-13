@@ -107,10 +107,9 @@ type TencentCloudRunConfig struct {
 	// If true, Packer will not create a final image. Defaults to `false`.
 	SkipCreateImage bool `mapstructure:"skip_create_image" required:"false"`
 
-	// If false, Packer will not run instance with security service, monitor service and automation service.
-	SecurityServiceEnabled   bool `mapstructure:"security_service_enabled" required:"false"`
-	MonitorServiceEnabled    bool `mapstructure:"monitor_service_enabled" required:"false"`
-	AutomationServiceEnabled bool `mapstructure:"automation_service_enabled" required:"false"`
+	DisableSecurityService   bool `mapstructure:"disable_security_service" required:"false"`
+	DisableMonitorService    bool `mapstructure:"disable_monitor_service" required:"false"`
+	DisableAutomationService bool `mapstructure:"disable_automation_service" required:"false"`
 }
 
 var ValidCBSType = []string{
