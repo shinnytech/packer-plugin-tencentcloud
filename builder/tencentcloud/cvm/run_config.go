@@ -104,8 +104,13 @@ type TencentCloudRunConfig struct {
 	// Communicator settings
 	Comm         communicator.Config `mapstructure:",squash"`
 	SSHPrivateIp bool                `mapstructure:"ssh_private_ip"`
-	//If true, Packer will not create a final image. Defaults to `false`.
+	// If true, Packer will not create a final image. Defaults to `false`.
 	SkipCreateImage bool `mapstructure:"skip_create_image" required:"false"`
+
+	// If false, Packer will not run instance with security service, monitor service and automation service.
+	SecurityServiceEnabled   bool `mapstructure:"security_service_enabled" required:"false"`
+	MonitorServiceEnabled    bool `mapstructure:"monitor_service_enabled" required:"false"`
+	AutomationServiceEnabled bool `mapstructure:"automation_service_enabled" required:"false"`
 }
 
 var ValidCBSType = []string{

@@ -112,6 +112,9 @@ type FlatConfig struct {
 	WinRMUseNTLM              *bool                      `mapstructure:"winrm_use_ntlm" cty:"winrm_use_ntlm" hcl:"winrm_use_ntlm"`
 	SSHPrivateIp              *bool                      `mapstructure:"ssh_private_ip" cty:"ssh_private_ip" hcl:"ssh_private_ip"`
 	SkipCreateImage           *bool                      `mapstructure:"skip_create_image" required:"false" cty:"skip_create_image" hcl:"skip_create_image"`
+	SecurityServiceEnabled    *bool                      `mapstructure:"security_service_enabled" required:"false" cty:"security_service_enabled" hcl:"security_service_enabled"`
+	MonitorServiceEnabled     *bool                      `mapstructure:"monitor_service_enabled" required:"false" cty:"monitor_service_enabled" hcl:"monitor_service_enabled"`
+	AutomationServiceEnabled  *bool                      `mapstructure:"automation_service_enabled" required:"false" cty:"automation_service_enabled" hcl:"automation_service_enabled"`
 	SkipRegionValidation      *bool                      `mapstructure:"skip_region_validation" required:"false" cty:"skip_region_validation" hcl:"skip_region_validation"`
 }
 
@@ -228,6 +231,9 @@ func (*FlatConfig) HCL2Spec() map[string]hcldec.Spec {
 		"winrm_use_ntlm":               &hcldec.AttrSpec{Name: "winrm_use_ntlm", Type: cty.Bool, Required: false},
 		"ssh_private_ip":               &hcldec.AttrSpec{Name: "ssh_private_ip", Type: cty.Bool, Required: false},
 		"skip_create_image":            &hcldec.AttrSpec{Name: "skip_create_image", Type: cty.Bool, Required: false},
+		"security_service_enabled":     &hcldec.AttrSpec{Name: "security_service_enabled", Type: cty.Bool, Required: false},
+		"monitor_service_enabled":      &hcldec.AttrSpec{Name: "monitor_service_enabled", Type: cty.Bool, Required: false},
+		"automation_service_enabled":   &hcldec.AttrSpec{Name: "automation_service_enabled", Type: cty.Bool, Required: false},
 		"skip_region_validation":       &hcldec.AttrSpec{Name: "skip_region_validation", Type: cty.Bool, Required: false},
 	}
 	return s

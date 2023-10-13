@@ -57,6 +57,17 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 
 	// config RunInstances parameters
 	req := cvm.NewRunInstancesRequest()
+	req.EnhancedService = &cvm.EnhancedService{
+		SecurityService: &cvm.RunSecurityServiceEnabled{
+			Enabled: &config.SecurityServiceEnabled,
+		},
+		MonitorService: &cvm.RunMonitorServiceEnabled{
+			Enabled: &config.MonitorServiceEnabled,
+		},
+		AutomationService: &cvm.RunAutomationServiceEnabled{
+			Enabled: &config.AutomationServiceEnabled,
+		},
+	}
 	instanceChargeType := s.InstanceChargeType
 	if instanceChargeType == "" {
 		instanceChargeType = "POSTPAID_BY_HOUR"
