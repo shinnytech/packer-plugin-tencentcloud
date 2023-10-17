@@ -109,7 +109,7 @@ func (s *stepConfigSubnet) Run(ctx context.Context, state multistep.StateBag) mu
 			for _, subnet := range resp.Response.SubnetSet {
 				if *subnet.VpcId != vpcId {
 					return Halt(state, fmt.Errorf("the specified subnet(%s) does not belong to the specified vpc(%s)",
-						subnet.SubnetId, vpcId), "")
+						*subnet.SubnetId, vpcId), "")
 				}
 			}
 			state.Put("subnets", resp.Response.SubnetSet)
@@ -144,7 +144,7 @@ func (s *stepConfigSubnet) Run(ctx context.Context, state multistep.StateBag) mu
 		// 每次创建成功后都将subnet收集起来，便于后续销毁
 		subnets = append(subnets, resp.Response.Subnet)
 		s.createdSubnets = subnets
-		Message(state, fmt.Sprintf("%d subnets in total.", subnets), "Subnet created")
+		Message(state, fmt.Sprintf("%d subnets in total.", len(subnets)), "Subnet created")
 	}
 	state.Put("subnets", subnets)
 
