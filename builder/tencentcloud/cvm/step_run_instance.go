@@ -57,24 +57,19 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 
 	// config RunInstances parameters
 	req := cvm.NewRunInstancesRequest()
-	req.EnhancedService = &cvm.EnhancedService{}
-	if &config.DisableSecurityService != nil {
-		enabled := !config.DisableSecurityService
-		req.EnhancedService.SecurityService = &cvm.RunSecurityServiceEnabled{
-			Enabled: &enabled,
-		}
-	}
-	if &config.DisableMonitorService != nil {
-		enabled := !config.DisableMonitorService
-		req.EnhancedService.MonitorService = &cvm.RunMonitorServiceEnabled{
-			Enabled: &enabled,
-		}
-	}
-	if &config.DisableAutomationService != nil {
-		enabled := !config.DisableAutomationService
-		req.EnhancedService.AutomationService = &cvm.RunAutomationServiceEnabled{
-			Enabled: &enabled,
-		}
+	securityEnabled := !config.DisableSecurityService
+	monitorEnabled := !config.DisableMonitorService
+	automationEnabled := !config.DisableAutomationService
+	req.EnhancedService = &cvm.EnhancedService{
+		SecurityService: &cvm.RunSecurityServiceEnabled{
+			Enabled: &securityEnabled,
+		},
+		MonitorService: &cvm.RunMonitorServiceEnabled{
+			Enabled: &monitorEnabled,
+		},
+		AutomationService: &cvm.RunAutomationServiceEnabled{
+			Enabled: &automationEnabled,
+		},
 	}
 
 	instanceChargeType := s.InstanceChargeType
