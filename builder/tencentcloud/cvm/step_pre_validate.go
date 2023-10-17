@@ -31,9 +31,9 @@ func (s *stepPreValidate) Run(ctx context.Context, state multistep.StateBag) mul
 
 	if image != nil {
 		if s.ForceDelete {
-			requestID, err := DeleteImageByID(ctx, client, *image.ImageId)
+			err = DeleteImageByID(ctx, client, *image.ImageId)
 			if err != nil {
-				return Halt(state, err, "Failed to delete image requestID: "+requestID)
+				return Halt(state, err, "Failed to delete image "+*image.ImageId)
 			}
 		} else {
 			return Halt(state, ImageExistsError, "")
