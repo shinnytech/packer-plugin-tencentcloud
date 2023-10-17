@@ -109,21 +109,20 @@ func GetImageByName(ctx context.Context, client *cvm.Client, imageName string) (
 }
 
 // DeleteImageByName get image by image name
-func DeleteImageByID(ctx context.Context, client *cvm.Client, imageID string) (string, error) {
+func DeleteImageByID(ctx context.Context, client *cvm.Client, imageID string) error {
 	req := cvm.NewDeleteImagesRequest()
 	req.ImageIds = []*string{&imageID}
 
-	var resp *cvm.DeleteImagesResponse
 	err := Retry(ctx, func(ctx context.Context) error {
 		var e error
-		resp, e = client.DeleteImagesWithContext(ctx, req)
+		_, e = client.DeleteImagesWithContext(ctx, req)
 		return e
 	})
 	if err != nil {
-		return *resp.Response.RequestId, err
+		return err
 	}
 
-	return *resp.Response.RequestId, nil
+	return nil
 }
 
 // NewCvmClient returns a new cvm client
