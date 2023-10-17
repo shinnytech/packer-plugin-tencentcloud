@@ -59,18 +59,21 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 	req := cvm.NewRunInstancesRequest()
 	req.EnhancedService = &cvm.EnhancedService{}
 	if &config.DisableSecurityService != nil {
+		enabled := !config.DisableSecurityService
 		req.EnhancedService.SecurityService = &cvm.RunSecurityServiceEnabled{
-			Enabled: &config.DisableSecurityService,
+			Enabled: &enabled,
 		}
 	}
 	if &config.DisableMonitorService != nil {
+		enabled := !config.DisableMonitorService
 		req.EnhancedService.MonitorService = &cvm.RunMonitorServiceEnabled{
-			Enabled: &config.DisableMonitorService,
+			Enabled: &enabled,
 		}
 	}
 	if &config.DisableAutomationService != nil {
+		enabled := !config.DisableAutomationService
 		req.EnhancedService.AutomationService = &cvm.RunAutomationServiceEnabled{
-			Enabled: &config.DisableAutomationService,
+			Enabled: &enabled,
 		}
 	}
 
@@ -199,7 +202,8 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 			return Halt(state, fmt.Errorf("no instance return"), "Failed to run instance")
 		}
 	}
-	if resp == nil {
+	// 如果所有subnet都尝试开机失败，则返回错误
+	if err != nil {
 		return Halt(state, fmt.Errorf("tried %d configurations but no luck", len(subnets.([]*vpc.Subnet))), "Failed to run instance")
 	}
 
