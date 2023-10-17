@@ -111,10 +111,10 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 		},
 		// 创建 subnet 或者选择 subnet 列表, 结果一定有 (subnet, zone) 列表
 		&stepConfigSubnet{
-			SubnetIds:       []string{b.config.SubnetId},
+			SubnetId:        b.config.SubnetId,
 			SubnetCidrBlock: b.config.SubnectCidrBlock,
 			SubnetName:      b.config.SubnetName,
-			Zones:           []string{b.config.Zone},
+			Zone:            b.config.Zone,
 		},
 		&stepConfigSecurityGroup{
 			SecurityGroupId:   b.config.SecurityGroupId,
