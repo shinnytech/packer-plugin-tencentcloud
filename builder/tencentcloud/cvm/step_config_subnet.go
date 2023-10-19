@@ -120,9 +120,8 @@ func (s *stepConfigSubnet) Run(ctx context.Context, state multistep.StateBag) mu
 	}
 
 	// 遍历候选可用区，在对应可用区内创建subnet并将subnet收集起来便于后续销毁
-	if s.SubnetName == "" {
-		s.SubnetName = fmt.Sprintf("packer_%s", uuid.TimeOrderedUUID()[:8])
-	}
+	// 此时subnetname一定为空，使用随机生成的名称
+	s.SubnetName = fmt.Sprintf("packer_%s", uuid.TimeOrderedUUID()[:8])
 	Say(state, s.SubnetName, "Trying to create a new subnet")
 	subnets := make([]*vpc.Subnet, 0)
 	for _, zone := range zones {
