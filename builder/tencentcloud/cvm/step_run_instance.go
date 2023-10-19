@@ -10,10 +10,9 @@ import (
 	"log"
 	"os"
 
-	vpc "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/vpc/v20170312"
-
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
+	vpc "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/vpc/v20170312"
 )
 
 // 移除了zoneid，由subnet step生成的subnet信息提供
