@@ -22,7 +22,7 @@ type stepConfigSubnet struct {
 	SubnetCidrBlock string
 	SubnetName      string
 	Zone            string // 用户指定的子网可用区
-	createdSubnets  []*vpc.Subnet
+	createdSubnet   *vpc.Subnet
 }
 
 func (s *stepConfigSubnet) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
@@ -139,13 +139,16 @@ func (s *stepConfigSubnet) Run(ctx context.Context, state multistep.StateBag) mu
 			return Halt(state, err, "Failed to create subnet")
 		}
 
-		// 每次创建成功后都将subnet收集起来，便于后续销毁
-		s.createdSubnets = append(s.createdSubnets, resp.Response.Subnet)
-	}
-	Message(state, fmt.Sprintf("%d subnets in total.", len(s.createdSubnets)), "Subnet created")
-	state.Put("subnets", s.createdSubnets)
+		// 创建成功后都将subnet收集起来，便于后续销毁
+		s.createdSubnet = resp.Response.Subnet
+		Message(state, fmt.Sprintf("subnet created: %s in zone: %s", *s.createdSubnet.SubnetId, *s.createdSubnet.Zone), "Subnet created")
 
-	return multistep.ActionContinue
+		// 由于cidr冲突，不能用同一个cidr创建多个subnet，所以创建成功后直接继续
+		state.Put("subnets", []*vpc.Subnet{s.createdSubnet})
+		return multistep.ActionContinue
+	}
+
+	return Halt(state, fmt.Errorf("cannot create subnet"), "no available subnet")
 }
 
 func (s *stepConfigSubnet) Cleanup(state multistep.StateBag) {
@@ -153,16 +156,14 @@ func (s *stepConfigSubnet) Cleanup(state multistep.StateBag) {
 	vpcClient := state.Get("vpc_client").(*vpc.Client)
 
 	SayClean(state, "subnet")
-
-	for _, subnet := range s.createdSubnets {
-		req := vpc.NewDeleteSubnetRequest()
-		req.SubnetId = subnet.SubnetId
-		err := Retry(ctx, func(ctx context.Context) error {
-			_, e := vpcClient.DeleteSubnet(req)
-			return e
-		})
-		if err != nil {
-			Error(state, err, fmt.Sprintf("Failed to delete subnet(%s), please delete it manually", *subnet.SubnetId))
-		}
+	req := vpc.NewDeleteSubnetRequest()
+	req.SubnetId = s.createdSubnet.SubnetId
+	err := Retry(ctx, func(ctx context.Context) error {
+		_, e := vpcClient.DeleteSubnet(req)
+		return e
+	})
+	if err != nil {
+		Error(state, err, fmt.Sprintf("Failed to delete subnet(%s), please delete it manually", *s.createdSubnet.SubnetId))
 	}
+
 }
