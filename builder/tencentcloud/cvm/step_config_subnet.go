@@ -123,7 +123,6 @@ func (s *stepConfigSubnet) Run(ctx context.Context, state multistep.StateBag) mu
 	// 此时subnetname一定为空，使用随机生成的名称
 	s.SubnetName = fmt.Sprintf("packer_%s", uuid.TimeOrderedUUID()[:8])
 	Say(state, s.SubnetName, "Trying to create a new subnet")
-	subnets := make([]*vpc.Subnet, 0)
 	for _, zone := range zones {
 		req := vpc.NewCreateSubnetRequest()
 		req.VpcId = &vpcId
@@ -141,11 +140,10 @@ func (s *stepConfigSubnet) Run(ctx context.Context, state multistep.StateBag) mu
 		}
 
 		// 每次创建成功后都将subnet收集起来，便于后续销毁
-		subnets = append(subnets, resp.Response.Subnet)
-		s.createdSubnets = subnets
-		Message(state, fmt.Sprintf("%d subnets in total.", len(subnets)), "Subnet created")
+		s.createdSubnets = append(s.createdSubnets, resp.Response.Subnet)
 	}
-	state.Put("subnets", subnets)
+	Message(state, fmt.Sprintf("%d subnets in total.", len(s.createdSubnets)), "Subnet created")
+	state.Put("subnets", s.createdSubnets)
 
 	return multistep.ActionContinue
 }
