@@ -153,6 +153,10 @@ func (s *stepConfigSubnet) Run(ctx context.Context, state multistep.StateBag) mu
 }
 
 func (s *stepConfigSubnet) Cleanup(state multistep.StateBag) {
+	// 如果没有创建subnet，则不需要删除
+	if s.createdSubnet == nil {
+		return
+	}
 	ctx := context.TODO()
 	vpcClient := state.Get("vpc_client").(*vpc.Client)
 
