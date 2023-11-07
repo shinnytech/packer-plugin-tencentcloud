@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/errors"
 	"log"
 	"os"
 
@@ -39,7 +40,6 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 
 	config := state.Get("config").(*Config)
 	source_image := state.Get("source_image").(*cvm.Image)
-	vpc_id := state.Get("vpc_id").(string)
 	security_group_id := state.Get("security_group_id").(string)
 
 	password := config.Comm.SSHPassword
@@ -166,47 +166,31 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 	if !ok {
 		Halt(state, fmt.Errorf("no subnets in state"), "Cannot get subnets info when starting instance")
 	}
-	var resp *cvm.RunInstancesResponse
+	// 腾讯云开机时返回instanceid后还需要等待实例状态为running才可认为开机成功。
 	for _, subnet := range subnets.([]*vpc.Subnet) {
-		Say(state,
-			fmt.Sprintf("instance-type: %s, subnet-id: %s, zone: %s",
-				s.InstanceType, *subnet.SubnetId, *subnet.Zone,
-			), "Try to create instance")
-		req.VirtualPrivateCloud = &cvm.VirtualPrivateCloud{
-			VpcId:    &vpc_id,
-			SubnetId: subnet.SubnetId,
+		instanceId, err := s.CreateCvmInstance(ctx, state, subnet, req)
+		if err == nil {
+			s.instanceId = instanceId
+			break
 		}
-		req.Placement = &cvm.Placement{
-			Zone: subnet.Zone,
-		}
-
-		err = Retry(ctx, func(ctx context.Context) error {
-			var e error
-			resp, e = client.RunInstances(req)
-			return e
-		})
-		if err != nil {
-			// halt会返回终止信号并且记录error，存在error在state中会导致最终执行标记为失败
-			// 此处只需要记录日志，因此使用say
-			Say(state, fmt.Sprintf("%s", err), "Failed to run instance")
-			continue
-		}
-
-		if len(resp.Response.InstanceIdSet) != 1 {
-			return Halt(state, fmt.Errorf("no instance return"), "Failed to run instance")
+		// 尝试删除已有的instanceId，避免资源泄露
+		if instanceId != "" {
+			req := cvm.NewTerminateInstancesRequest()
+			req.InstanceIds = []*string{&s.instanceId}
+			err := Retry(ctx, func(ctx context.Context) error {
+				_, e := client.TerminateInstances(req)
+				return e
+			})
+			// 如果删除失败，且不是因为instanceId不存在，则报错
+			// instanceId不存在代表之前开机不成功，此处不需要再次删除，若是LAUNCH_FAILED会预到Code=InvalidInstanceId.NotFound，跳过尝试下一个subnet继续尝试开机即可
+			if err != nil && err.(*errors.TencentCloudSDKError).Code != "InvalidInstanceId.NotFound" {
+				// 提示用户手动删除
+				Say(state, err.Error(), fmt.Sprintf("Failed to terminate instance(%s), may need to delete it manually", s.instanceId))
+			}
 		}
 	}
-	// 如果所有subnet都尝试开机失败，则返回错误
 	if err != nil {
 		return Halt(state, fmt.Errorf("tried %d configurations but no luck", len(subnets.([]*vpc.Subnet))), "Failed to run instance")
-	}
-
-	s.instanceId = *resp.Response.InstanceIdSet[0]
-	Message(state, "Waiting for instance ready", "")
-
-	err = WaitForInstance(ctx, client, s.instanceId, "RUNNING", 1800)
-	if err != nil {
-		return Halt(state, err, "Failed to wait for instance ready")
 	}
 
 	describeReq := cvm.NewDescribeInstancesRequest()
@@ -214,7 +198,7 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 	var describeResp *cvm.DescribeInstancesResponse
 	err = Retry(ctx, func(ctx context.Context) error {
 		var e error
-		describeResp, e = client.DescribeInstances(describeReq)
+		describeResp, e = client.DescribeInstancesWithContext(ctx, describeReq)
 		return e
 	})
 	if err != nil {
@@ -265,4 +249,46 @@ func (s *stepRunInstance) Cleanup(state multistep.StateBag) {
 	if err != nil {
 		Error(state, err, fmt.Sprintf("Failed to terminate instance(%s), please delete it manually", s.instanceId))
 	}
+}
+
+func (s *stepRunInstance) CreateCvmInstance(ctx context.Context, state multistep.StateBag, subnet *vpc.Subnet, req *cvm.RunInstancesRequest) (string, error) {
+	client := state.Get("cvm_client").(*cvm.Client)
+	vpc_id := state.Get("vpc_id").(string)
+	Say(state,
+		fmt.Sprintf("instance-type: %s, subnet-id: %s, zone: %s",
+			s.InstanceType, *subnet.SubnetId, *subnet.Zone,
+		), "Try to create instance")
+	req.VirtualPrivateCloud = &cvm.VirtualPrivateCloud{
+		VpcId:    &vpc_id,
+		SubnetId: subnet.SubnetId,
+	}
+	req.Placement = &cvm.Placement{
+		Zone: subnet.Zone,
+	}
+	var resp *cvm.RunInstancesResponse
+	err := Retry(ctx, func(ctx context.Context) error {
+		var e error
+		resp, e = client.RunInstances(req)
+		return e
+	})
+	if err != nil {
+		// halt会返回终止信号并且记录error，存在error在state中会导致最终执行标记为失败
+		// 此处只需要记录日志，因此使用say
+		Say(state, fmt.Sprintf("%s", err), "Failed to run instance")
+		return "", err
+	}
+
+	if len(resp.Response.InstanceIdSet) != 1 {
+		return "", fmt.Errorf("expect 1 instance id, got %d", len(resp.Response.InstanceIdSet))
+	}
+
+	instanceId := *resp.Response.InstanceIdSet[0]
+	Message(state, "Waiting for instance ready", "")
+
+	// 如果资源不足或者配置有错误如ip冲突会造成状态为LAUNCH_FAILED。
+	err = WaitForInstance(ctx, client, s.instanceId, "RUNNING", 1800)
+	if err != nil {
+		return instanceId, fmt.Errorf("failed to wait for instance ready, %w", err)
+	}
+	return instanceId, nil
 }
