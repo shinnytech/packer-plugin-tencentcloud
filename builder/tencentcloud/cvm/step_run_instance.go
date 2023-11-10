@@ -7,11 +7,11 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/errors"
 	"log"
 	"os"
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
+	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/errors"
 	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
 	vpc "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/vpc/v20170312"
 )
@@ -168,27 +168,31 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 	}
 	// 腾讯云开机时返回instanceid后还需要等待实例状态为running才可认为开机成功。
 	for _, subnet := range subnets.([]*vpc.Subnet) {
-		instanceId, err := s.CreateCvmInstance(ctx, state, subnet, req)
+		var instanceId []string
+		instanceId, err = s.CreateCvmInstance(ctx, state, subnet, req)
 		if err == nil {
-			s.instanceId = instanceId
+			s.instanceId = instanceId[0]
 			break
 		}
 		// 尝试删除已有的instanceId，避免资源泄露
-		if instanceId != "" {
-			req := cvm.NewTerminateInstancesRequest()
-			req.InstanceIds = []*string{&s.instanceId}
-			err := Retry(ctx, func(ctx context.Context) error {
-				_, e := client.TerminateInstances(req)
-				return e
-			})
-			// 如果删除失败，且不是因为instanceId不存在，则报错
-			// instanceId不存在代表之前开机不成功，此处不需要再次删除，若是LAUNCH_FAILED会预到Code=InvalidInstanceId.NotFound，跳过尝试下一个subnet继续尝试开机即可
-			if err != nil && err.(*errors.TencentCloudSDKError).Code != "InvalidInstanceId.NotFound" {
-				// 提示用户手动删除
-				Say(state, err.Error(), fmt.Sprintf("Failed to terminate instance(%s), may need to delete it manually", s.instanceId))
+		for _, id := range instanceId {
+			if id != "" {
+				req := cvm.NewTerminateInstancesRequest()
+				req.InstanceIds = []*string{&id}
+				terminateErr := Retry(ctx, func(ctx context.Context) error {
+					_, e := client.TerminateInstances(req)
+					return e
+				})
+				// 如果删除失败，且不是因为instanceId不存在，则报错
+				// instanceId不存在代表之前开机不成功，此处不需要再次删除。若是LAUNCH_FAILED会预到Code=InvalidInstanceId.NotFound，跳过尝试下一个subnet继续尝试开机即可
+				if terminateErr != nil && terminateErr.(*errors.TencentCloudSDKError).Code != "InvalidInstanceId.NotFound" {
+					// undefined behavior, just halt
+					Halt(state, terminateErr, fmt.Sprintf("Failed to terminate instance(%s), may need to delete it manually", id))
+				}
 			}
 		}
 	}
+	// 最后一次开机也不成功，报错
 	if err != nil {
 		return Halt(state, fmt.Errorf("tried %d configurations but no luck", len(subnets.([]*vpc.Subnet))), "Failed to run instance")
 	}
@@ -251,15 +255,15 @@ func (s *stepRunInstance) Cleanup(state multistep.StateBag) {
 	}
 }
 
-func (s *stepRunInstance) CreateCvmInstance(ctx context.Context, state multistep.StateBag, subnet *vpc.Subnet, req *cvm.RunInstancesRequest) (string, error) {
+func (s *stepRunInstance) CreateCvmInstance(ctx context.Context, state multistep.StateBag, subnet *vpc.Subnet, req *cvm.RunInstancesRequest) ([]string, error) {
 	client := state.Get("cvm_client").(*cvm.Client)
-	vpc_id := state.Get("vpc_id").(string)
+	vpcId := state.Get("vpc_id").(string)
 	Say(state,
 		fmt.Sprintf("instance-type: %s, subnet-id: %s, zone: %s",
 			s.InstanceType, *subnet.SubnetId, *subnet.Zone,
 		), "Try to create instance")
 	req.VirtualPrivateCloud = &cvm.VirtualPrivateCloud{
-		VpcId:    &vpc_id,
+		VpcId:    &vpcId,
 		SubnetId: subnet.SubnetId,
 	}
 	req.Placement = &cvm.Placement{
@@ -275,11 +279,11 @@ func (s *stepRunInstance) CreateCvmInstance(ctx context.Context, state multistep
 		// halt会返回终止信号并且记录error，存在error在state中会导致最终执行标记为失败
 		// 此处只需要记录日志，因此使用say
 		Say(state, fmt.Sprintf("%s", err), "Failed to run instance")
-		return "", err
+		return make([]string, 0), err
 	}
 
 	if len(resp.Response.InstanceIdSet) != 1 {
-		return "", fmt.Errorf("expect 1 instance id, got %d", len(resp.Response.InstanceIdSet))
+		return make([]string, 0), fmt.Errorf("expect 1 instance id, got %d", len(resp.Response.InstanceIdSet))
 	}
 
 	instanceId := *resp.Response.InstanceIdSet[0]
@@ -288,7 +292,7 @@ func (s *stepRunInstance) CreateCvmInstance(ctx context.Context, state multistep
 	// 如果资源不足或者配置有错误如ip冲突会造成状态为LAUNCH_FAILED。
 	err = WaitForInstance(ctx, client, s.instanceId, "RUNNING", 1800)
 	if err != nil {
-		return instanceId, fmt.Errorf("failed to wait for instance ready, %w", err)
+		return []string{instanceId}, fmt.Errorf("failed to wait for instance ready, %w", err)
 	}
-	return instanceId, nil
+	return []string{instanceId}, nil
 }
