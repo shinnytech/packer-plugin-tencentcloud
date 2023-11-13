@@ -188,7 +188,7 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 			if terminateErr != nil && terminateErr.(*errors.TencentCloudSDKError).Code != "InvalidInstanceId.NotFound" {
 				// undefined behavior, just halt
 				// halt use put to store error in state, it cannot append
-				return Halt(state, terminateErr, fmt.Sprintf("Failed to terminate instance(%s), may need to delete it manually", id))
+				return Halt(state, terminateErr, fmt.Sprintf("Failed to terminate instance(%s), may need to delete it manually", *id))
 			}
 		}
 	}
