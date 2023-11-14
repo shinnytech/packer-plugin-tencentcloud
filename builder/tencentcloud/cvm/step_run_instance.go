@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/errors"
@@ -168,28 +169,31 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 	}
 	// 腾讯云开机时返回instanceid后还需要等待实例状态为running才可认为开机成功。
 	for _, subnet := range subnets.([]*vpc.Subnet) {
-		var instanceId []*string
-		instanceId, err = s.CreateCvmInstance(ctx, state, subnet, req)
+		var instanceIds []*string
+		instanceIds, err = s.CreateCvmInstance(ctx, state, subnet, req)
 		if err == nil {
 			// 此时 WaitForInstance 已经确认了instance状态为RUNNING，可以认为开机成功，且id不可能为空
-			s.instanceId = *instanceId[0]
+			s.instanceId = *instanceIds[0]
 			break
 		}
 		// 尝试删除已有的instanceId，避免资源泄露
-		for _, id := range instanceId {
-			req := cvm.NewTerminateInstancesRequest()
-			req.InstanceIds = []*string{id}
-			terminateErr := Retry(ctx, func(ctx context.Context) error {
-				_, e := client.TerminateInstances(req)
-				return e
-			})
-			// 如果删除失败，且不是因为instanceId不存在，则报错
-			// instanceId不存在代表之前开机不成功，此处不需要再次删除。若是LAUNCH_FAILED会预到Code=InvalidInstanceId.NotFound，跳过尝试下一个subnet继续尝试开机即可
-			if terminateErr != nil && terminateErr.(*errors.TencentCloudSDKError).Code != "InvalidInstanceId.NotFound" {
-				// undefined behavior, just halt
-				// halt use put to store error in state, it cannot append
-				return Halt(state, terminateErr, fmt.Sprintf("Failed to terminate instance(%s), may need to delete it manually", *id))
+		req := cvm.NewTerminateInstancesRequest()
+		req.InstanceIds = instanceIds
+		terminateErr := Retry(ctx, func(ctx context.Context) error {
+			_, e := client.TerminateInstances(req)
+			return e
+		})
+		// 如果删除失败，且不是因为instanceId不存在，则报错
+		// instanceId不存在代表之前开机不成功，此处不需要再次删除。若是LAUNCH_FAILED会预到Code=InvalidInstanceId.NotFound，跳过尝试下一个subnet继续尝试开机即可
+		if terminateErr != nil && terminateErr.(*errors.TencentCloudSDKError).Code != "InvalidInstanceId.NotFound" {
+			// undefined behavior, just halt
+			// halt use put to store error in state, it cannot append
+			var builder strings.Builder
+			for _, instanceId := range instanceIds {
+				builder.WriteString(*instanceId)
+				builder.WriteString(",")
 			}
+			return Halt(state, terminateErr, fmt.Sprintf("Failed to terminate instance %s may need to delete it manually", builder.String()))
 		}
 	}
 	// 最后一次开机也不成功，报错
