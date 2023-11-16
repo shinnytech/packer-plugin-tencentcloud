@@ -167,6 +167,7 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 	if !ok {
 		return Halt(state, fmt.Errorf("no subnets in state"), "Cannot get subnets info when starting instance")
 	}
+	err = fmt.Errorf("No subnet found")
 	// 腾讯云开机时返回instanceid后还需要等待实例状态为running才可认为开机成功。
 	for _, subnet := range subnets.([]*vpc.Subnet) {
 		var instanceIds []*string
@@ -283,14 +284,16 @@ func (s *stepRunInstance) CreateCvmInstance(ctx context.Context, state multistep
 		// halt会返回终止信号并且记录error，存在error在state中会导致最终执行标记为失败
 		// 此处只需要记录日志，因此使用say
 		Say(state, fmt.Sprintf("%s", err), "Failed to run instance")
-		if resp != nil && resp.Response != nil && resp.Response.InstanceIdSet != nil && len(resp.Response.InstanceIdSet) > 0 {
-			return resp.Response.InstanceIdSet, nil
-		} else {
+		if resp == nil || resp.Response == nil {
 			return nil, err
+		} else {
+			return resp.Response.InstanceIdSet, err
 		}
 	}
 
-	if len(resp.Response.InstanceIdSet) != 1 {
+	if resp == nil || resp.Response == nil {
+		return nil, fmt.Errorf("no response")
+	} else if len(resp.Response.InstanceIdSet) != 1 {
 		return resp.Response.InstanceIdSet, fmt.Errorf("expect 1 instance id, got %d", len(resp.Response.InstanceIdSet))
 	}
 
@@ -298,7 +301,7 @@ func (s *stepRunInstance) CreateCvmInstance(ctx context.Context, state multistep
 	Message(state, "Waiting for instance ready", "")
 
 	// 如果资源不足或者配置有错误如ip冲突会造成状态为LAUNCH_FAILED。
-	err = WaitForInstance(ctx, client, instanceId, "RUNNING", 1800)
+	err = WaitForInstance(ctx, client, instanceId, "RUNNING", 600)
 	if err != nil {
 		return resp.Response.InstanceIdSet, fmt.Errorf("failed to wait for instance ready, %w", err)
 	}
