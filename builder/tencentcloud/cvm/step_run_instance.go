@@ -7,13 +7,14 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"log"
+	"os"
+	"strings"
+
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/errors"
 	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
 	vpc "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/vpc/v20170312"
-	"log"
-	"os"
-	"strings"
 )
 
 // 移除了zoneid，由subnet step生成的subnet信息提供
