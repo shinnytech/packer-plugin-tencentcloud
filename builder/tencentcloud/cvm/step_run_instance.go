@@ -7,14 +7,13 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"log"
-	"os"
-	"strings"
-
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/errors"
 	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
 	vpc "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/vpc/v20170312"
+	"log"
+	"os"
+	"strings"
 )
 
 // 移除了zoneid，由subnet step生成的subnet信息提供
@@ -177,24 +176,27 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 			s.instanceId = *instanceIds[0]
 			break
 		}
-		// 尝试删除已有的instanceId，避免资源泄露
-		req := cvm.NewTerminateInstancesRequest()
-		req.InstanceIds = instanceIds
-		terminateErr := Retry(ctx, func(ctx context.Context) error {
-			_, e := client.TerminateInstances(req)
-			return e
-		})
-		// 如果删除失败，且不是因为instanceId不存在，则报错
-		// instanceId不存在代表之前开机不成功，此处不需要再次删除。若是LAUNCH_FAILED会预到Code=InvalidInstanceId.NotFound，跳过尝试下一个subnet继续尝试开机即可
-		if terminateErr != nil && terminateErr.(*errors.TencentCloudSDKError).Code != "InvalidInstanceId.NotFound" {
-			// undefined behavior, just halt
-			// halt use put to store error in state, it cannot append
-			var builder strings.Builder
-			for _, instanceId := range instanceIds {
-				builder.WriteString(*instanceId)
-				builder.WriteString(",")
+		// InstanceIdSet不为空，代表已经创建了instance，但是开机不成功，此时需要删除instance
+		if instanceIds != nil {
+			// 尝试删除已有的instanceId，避免资源泄露
+			terminateReq := cvm.NewTerminateInstancesRequest()
+			terminateReq.InstanceIds = instanceIds
+			terminateErr := Retry(ctx, func(ctx context.Context) error {
+				_, e := client.TerminateInstances(terminateReq)
+				return e
+			})
+			// 如果删除失败，且不是因为instanceId不存在，则报错
+			// instanceId不存在代表之前开机不成功，此处不需要再次删除。若是LAUNCH_FAILED会预到Code=InvalidInstanceId.NotFound，跳过尝试下一个subnet继续尝试开机即可
+			if terminateErr != nil && terminateErr.(*errors.TencentCloudSDKError).Code != "InvalidInstanceId.NotFound" {
+				// undefined behavior, just halt
+				// halt use put to store error in state, it cannot append
+				var builder strings.Builder
+				for _, instanceId := range instanceIds {
+					builder.WriteString(*instanceId)
+					builder.WriteString(",")
+				}
+				return Halt(state, terminateErr, fmt.Sprintf("Failed to terminate instance %s may need to delete it manually", builder.String()))
 			}
-			return Halt(state, terminateErr, fmt.Sprintf("Failed to terminate instance %s may need to delete it manually", builder.String()))
 		}
 	}
 	// 最后一次开机也不成功，报错
