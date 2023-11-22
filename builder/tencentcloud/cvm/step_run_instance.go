@@ -178,7 +178,7 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 			break
 		}
 		// InstanceIdSet不为空，代表已经创建了instance，但是开机不成功，此时需要删除instance
-		if instanceIds != nil {
+		if len(instanceIds) > 0 {
 			// 尝试删除已有的instanceId，避免资源泄露
 			terminateReq := cvm.NewTerminateInstancesRequest()
 			terminateReq.InstanceIds = instanceIds
