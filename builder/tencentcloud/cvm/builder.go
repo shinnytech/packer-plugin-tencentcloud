@@ -123,7 +123,7 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 		},
 		// 遍历 subnet 列表, 尝试创建机器，直到创建成功或最终失败
 		&stepRunInstance{
-			InstanceType:             b.config.InstanceType,
+			InstanceTypeCandidates:   b.config.InstanceTypeCandidates,
 			InstanceChargeType:       b.config.InstanceChargeType,
 			UserData:                 b.config.UserData,
 			UserDataFile:             b.config.UserDataFile,

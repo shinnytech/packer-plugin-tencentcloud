@@ -11,6 +11,15 @@
 
 - `instance_charge_type` (string) - Charge type of cvm, values can be `POSTPAID_BY_HOUR` (default) `SPOTPAID`
 
+- `instance_type_candidates` ([]string) - The instance type candidate list your cvm will be launched by.
+  Will try to launch instance type from this list in order.
+  You should reference Instace Type
+   for parameter taking.
+
+- `instance_type` (string) - The instance type your cvm will be launched by.
+  You should reference Instace Type
+   for parameter taking.
+
 - `instance_name` (string) - Instance name.
 
 - `disk_type` (string) - Root disk type your cvm will be launched by, default is `CLOUD_PREMIUM`. you could

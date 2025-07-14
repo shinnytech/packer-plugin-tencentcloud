@@ -19,7 +19,7 @@ import (
 
 // 移除了zoneid，由subnet step生成的subnet信息提供
 type stepRunInstance struct {
-	InstanceType             string
+	InstanceTypeCandidates   []string
 	InstanceChargeType       string
 	UserData                 string
 	UserDataFile             string
@@ -78,7 +78,7 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 	}
 	req.InstanceChargeType = &instanceChargeType
 	req.ImageId = source_image.ImageId
-	req.InstanceType = &s.InstanceType
+	// Instance type will be set later
 	// TODO: Add check for system disk size, it should be larger than image system disk size.
 	req.SystemDisk = &cvm.SystemDisk{
 		DiskType: &s.DiskType,
@@ -168,35 +168,40 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 		return Halt(state, fmt.Errorf("no subnets in state"), "Cannot get subnets info when starting instance")
 	}
 	err = fmt.Errorf("No subnet found")
-	// 腾讯云开机时返回instanceid后还需要等待实例状态为running才可认为开机成功。
-	for _, subnet := range subnets.([]*vpc.Subnet) {
-		var instanceIds []*string
-		instanceIds, err = s.CreateCvmInstance(ctx, state, subnet, req)
-		if err == nil {
-			// 此时 WaitForInstance 已经确认了instance状态为RUNNING，可以认为开机成功，且id不可能为空
-			s.instanceId = *instanceIds[0]
-			break
-		}
-		// InstanceIdSet不为空，代表已经创建了instance，但是开机不成功，此时需要删除instance
-		if len(instanceIds) > 0 {
-			// 尝试删除已有的instanceId，避免资源泄露
-			terminateReq := cvm.NewTerminateInstancesRequest()
-			terminateReq.InstanceIds = instanceIds
-			terminateErr := Retry(ctx, func(ctx context.Context) error {
-				_, e := client.TerminateInstances(terminateReq)
-				return e
-			})
-			// 如果删除失败，且不是因为instanceId不存在，则报错
-			// instanceId不存在代表之前开机不成功，此处不需要再次删除。若是LAUNCH_FAILED会预到Code=InvalidInstanceId.NotFound，跳过尝试下一个subnet继续尝试开机即可
-			if terminateErr != nil && terminateErr.(*errors.TencentCloudSDKError).Code != "InvalidInstanceId.NotFound" {
-				// undefined behavior, just halt
-				// halt use put to store error in state, it cannot append
-				var builder strings.Builder
-				for _, instanceId := range instanceIds {
-					builder.WriteString(*instanceId)
-					builder.WriteString(",")
+	// 根据instance_type_candidates顺序尝试创建instance
+loop:
+	for _, instanceType := range s.InstanceTypeCandidates {
+		req.InstanceType = &instanceType
+		// 腾讯云开机时返回instanceid后还需要等待实例状态为running才可认为开机成功。
+		for _, subnet := range subnets.([]*vpc.Subnet) {
+			var instanceIds []*string
+			instanceIds, err = s.CreateCvmInstance(ctx, state, subnet, req)
+			if err == nil {
+				// 此时 WaitForInstance 已经确认了instance状态为RUNNING，可以认为开机成功，且id不可能为空
+				s.instanceId = *instanceIds[0]
+				break loop
+			}
+			// InstanceIdSet不为空，代表已经创建了instance，但是开机不成功，此时需要删除instance
+			if len(instanceIds) > 0 {
+				// 尝试删除已有的instanceId，避免资源泄露
+				terminateReq := cvm.NewTerminateInstancesRequest()
+				terminateReq.InstanceIds = instanceIds
+				terminateErr := Retry(ctx, func(ctx context.Context) error {
+					_, e := client.TerminateInstances(terminateReq)
+					return e
+				})
+				// 如果删除失败，且不是因为instanceId不存在，则报错
+				// instanceId不存在代表之前开机不成功，此处不需要再次删除。若是LAUNCH_FAILED会预到Code=InvalidInstanceId.NotFound，跳过尝试下一个subnet继续尝试开机即可
+				if terminateErr != nil && terminateErr.(*errors.TencentCloudSDKError).Code != "InvalidInstanceId.NotFound" {
+					// undefined behavior, just halt
+					// halt use put to store error in state, it cannot append
+					var builder strings.Builder
+					for _, instanceId := range instanceIds {
+						builder.WriteString(*instanceId)
+						builder.WriteString(",")
+					}
+					return Halt(state, terminateErr, fmt.Sprintf("Failed to terminate instance %s may need to delete it manually", builder.String()))
 				}
-				return Halt(state, terminateErr, fmt.Sprintf("Failed to terminate instance %s may need to delete it manually", builder.String()))
 			}
 		}
 	}
@@ -268,7 +273,7 @@ func (s *stepRunInstance) CreateCvmInstance(ctx context.Context, state multistep
 	vpcId := state.Get("vpc_id").(string)
 	Say(state,
 		fmt.Sprintf("instance-type: %s, subnet-id: %s, zone: %s",
-			s.InstanceType, *subnet.SubnetId, *subnet.Zone,
+			*req.InstanceType, *subnet.SubnetId, *subnet.Zone,
 		), "Try to create instance")
 	req.VirtualPrivateCloud = &cvm.VirtualPrivateCloud{
 		VpcId:    &vpcId,

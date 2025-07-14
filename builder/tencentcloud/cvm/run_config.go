@@ -36,10 +36,15 @@ type TencentCloudRunConfig struct {
 	SourceImageName string `mapstructure:"source_image_name" required:"false"`
 	// Charge type of cvm, values can be `POSTPAID_BY_HOUR` (default) `SPOTPAID`
 	InstanceChargeType string `mapstructure:"instance_charge_type" required:"false"`
+	// The instance type candidate list your cvm will be launched by.
+	// Will try to launch instance type from this list in order.
+	// You should reference Instace Type
+	//  for parameter taking.
+	InstanceTypeCandidates []string `mapstructure:"instance_type_candidates" required:"false"`
 	// The instance type your cvm will be launched by.
 	// You should reference Instace Type
 	//  for parameter taking.
-	InstanceType string `mapstructure:"instance_type" required:"true"`
+	InstanceType string `mapstructure:"instance_type" required:"false"`
 	// Instance name.
 	InstanceName string `mapstructure:"instance_name" required:"false"`
 	// Root disk type your cvm will be launched by, default is `CLOUD_PREMIUM`. you could
@@ -133,8 +138,13 @@ func (cf *TencentCloudRunConfig) Prepare(ctx *interpolate.Context) []error {
 		errs = append(errs, errors.New("source_image_id wrong format"))
 	}
 
-	if cf.InstanceType == "" {
-		errs = append(errs, errors.New("instance_type must be specified"))
+	if cf.InstanceType != "" && len(cf.InstanceTypeCandidates) != 0 {
+		errs = append(errs, errors.New("only one of instance_type or instance_type_candidates can be specified"))
+	} else if cf.InstanceType == "" && len(cf.InstanceTypeCandidates) == 0 {
+		errs = append(errs, errors.New("instance_type or instance_type_candidates must be specified"))
+	} else if len(cf.InstanceTypeCandidates) == 0 {
+		// normalize
+		cf.InstanceTypeCandidates = []string{cf.InstanceType}
 	}
 
 	if cf.UserData != "" && cf.UserDataFile != "" {
@@ -145,7 +155,7 @@ func (cf *TencentCloudRunConfig) Prepare(ctx *interpolate.Context) []error {
 		}
 	}
 
-	// 添加SubnetName的判断，制定了SubnetName会自动搜索SubnetId
+	// 添加SubnetName的判断，指定了SubnetName会自动搜索SubnetId
 	if (cf.VpcId != "" || cf.CidrBlock != "") && cf.SubnetId == "" && cf.SubnetName == "" && cf.SubnectCidrBlock == "" {
 		errs = append(errs, errors.New("if vpc cidr_block is specified, then "+
 			"subnet_cidr_block must also be specified."))
