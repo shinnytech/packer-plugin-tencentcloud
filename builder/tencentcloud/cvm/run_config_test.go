@@ -13,8 +13,8 @@ import (
 
 func testConfig() *TencentCloudRunConfig {
 	return &TencentCloudRunConfig{
-		SourceImageId: "img-qwer1234",
-		InstanceType:  "S3.SMALL2",
+		SourceImageId:          "img-qwer1234",
+		InstanceTypeCandidates: []string{"S3.SMALL2"},
 		Comm: communicator.Config{
 			SSH: communicator.SSH{
 				SSHUsername: "tencentcloud",
@@ -30,12 +30,18 @@ func TestTencentCloudRunConfig_Prepare(t *testing.T) {
 		t.Fatalf("shouldn't have err: %v", err)
 	}
 
-	cf.InstanceType = ""
+	cf.InstanceType = "S3.SMALL2"
 	if err := cf.Prepare(nil); err == nil {
 		t.Fatal("should have err")
 	}
 
-	cf.InstanceType = "S3.SMALL2"
+	cf.InstanceType = ""
+	cf.InstanceTypeCandidates = []string{}
+	if err := cf.Prepare(nil); err == nil {
+		t.Fatal("should have err")
+	}
+
+	cf.InstanceTypeCandidates = []string{"S3.SMALL2"}
 	cf.SourceImageId = ""
 	if err := cf.Prepare(nil); err == nil {
 		t.Fatal("should have err")
