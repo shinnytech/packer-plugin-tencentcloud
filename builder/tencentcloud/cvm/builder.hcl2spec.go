@@ -116,6 +116,7 @@ type FlatConfig struct {
 	DisableSecurityService    *bool                      `mapstructure:"disable_security_service" required:"false" cty:"disable_security_service" hcl:"disable_security_service"`
 	DisableMonitorService     *bool                      `mapstructure:"disable_monitor_service" required:"false" cty:"disable_monitor_service" hcl:"disable_monitor_service"`
 	DisableAutomationService  *bool                      `mapstructure:"disable_automation_service" required:"false" cty:"disable_automation_service" hcl:"disable_automation_service"`
+	PlacementGroupId          *string                    `mapstructure:"placement_group_id" required:"false" cty:"placement_group_id" hcl:"placement_group_id"`
 	SkipRegionValidation      *bool                      `mapstructure:"skip_region_validation" required:"false" cty:"skip_region_validation" hcl:"skip_region_validation"`
 }
 
@@ -236,6 +237,7 @@ func (*FlatConfig) HCL2Spec() map[string]hcldec.Spec {
 		"disable_security_service":     &hcldec.AttrSpec{Name: "disable_security_service", Type: cty.Bool, Required: false},
 		"disable_monitor_service":      &hcldec.AttrSpec{Name: "disable_monitor_service", Type: cty.Bool, Required: false},
 		"disable_automation_service":   &hcldec.AttrSpec{Name: "disable_automation_service", Type: cty.Bool, Required: false},
+		"placement_group_id":           &hcldec.AttrSpec{Name: "placement_group_id", Type: cty.String, Required: false},
 		"skip_region_validation":       &hcldec.AttrSpec{Name: "skip_region_validation", Type: cty.Bool, Required: false},
 	}
 	return s

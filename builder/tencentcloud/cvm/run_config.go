@@ -115,6 +115,8 @@ type TencentCloudRunConfig struct {
 	DisableSecurityService   bool `mapstructure:"disable_security_service" required:"false"`
 	DisableMonitorService    bool `mapstructure:"disable_monitor_service" required:"false"`
 	DisableAutomationService bool `mapstructure:"disable_automation_service" required:"false"`
+
+	PlacementGroupId string `mapstructure:"placement_group_id" required:"false"`
 }
 
 var ValidCBSType = []string{

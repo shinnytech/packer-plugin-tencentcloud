@@ -137,6 +137,7 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 			BandwidthPackageId:       b.config.BandwidthPackageId,
 			AssociatePublicIpAddress: b.config.AssociatePublicIpAddress,
 			Tags:                     b.config.RunTags,
+			PlacementGroupId:         b.config.PlacementGroupId,
 		},
 		&communicator.StepConnect{
 			Config:    &b.config.TencentCloudRunConfig.Comm,

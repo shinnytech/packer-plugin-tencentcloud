@@ -34,6 +34,7 @@ type stepRunInstance struct {
 	AssociatePublicIpAddress bool
 	Tags                     map[string]string
 	DataDisks                []tencentCloudDataDisk
+	PlacementGroupId         string
 }
 
 func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
@@ -70,6 +71,10 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 		AutomationService: &cvm.RunAutomationServiceEnabled{
 			Enabled: &automationEnabled,
 		},
+	}
+
+	if s.PlacementGroupId != "" {
+		req.DisasterRecoverGroupIds = []*string{&s.PlacementGroupId}
 	}
 
 	instanceChargeType := s.InstanceChargeType
