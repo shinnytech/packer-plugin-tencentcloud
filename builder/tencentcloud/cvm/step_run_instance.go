@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
+	"github.com/hashicorp/packer-plugin-sdk/uuid"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/errors"
 	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
 	vpc "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/vpc/v20170312"
@@ -146,7 +147,7 @@ func (s *stepRunInstance) Run(ctx context.Context, state multistep.StateBag) mul
 	}
 	req.LoginSettings = &loginSettings
 	req.SecurityGroupIds = []*string{&security_group_id}
-	req.ClientToken = &s.InstanceName
+	// client token 在 loop 中生成，避免重复使用
 	req.HostName = &s.HostName
 	req.UserData = &userData
 	var tags []*cvm.Tag
@@ -180,6 +181,8 @@ loop:
 		// 腾讯云开机时返回instanceid后还需要等待实例状态为running才可认为开机成功。
 		for _, subnet := range subnets.([]*vpc.Subnet) {
 			var instanceIds []*string
+			token := uuid.TimeOrderedUUID()
+			req.ClientToken = &token
 			instanceIds, err = s.CreateCvmInstance(ctx, state, subnet, req)
 			if err == nil {
 				// 此时 WaitForInstance 已经确认了instance状态为RUNNING，可以认为开机成功，且id不可能为空
