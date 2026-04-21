@@ -46,6 +46,9 @@ func WaitForInstance(ctx context.Context, client *cvm.Client, instanceId string,
 			(resp.Response.InstanceSet[0].LatestOperationState == nil ||
 				*resp.Response.InstanceSet[0].LatestOperationState != "OPERATING") {
 			break
+		} else if *resp.Response.InstanceSet[0].InstanceState == "LAUNCH_FAILED" {
+			// fail fast
+			return fmt.Errorf("wait instance(%s) status(%s) failed", instanceId, status)
 		}
 		time.Sleep(DefaultWaitForInterval * time.Second)
 		timeout = timeout - DefaultWaitForInterval
