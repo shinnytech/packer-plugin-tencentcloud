@@ -319,7 +319,9 @@ func (s *stepRunInstance) CreateCvmInstance(ctx context.Context, state multistep
 	// 如果资源不足或者配置有错误如ip冲突会造成状态为LAUNCH_FAILED。
 	err = WaitForInstance(ctx, client, instanceId, "RUNNING", 600)
 	if err != nil {
-		return resp.Response.InstanceIdSet, fmt.Errorf("failed to wait for instance ready, %w", err)
+		errInfo := fmt.Errorf("failed to wait for instance ready, %w", err)
+		Say(state, errInfo.Error(), "Failed to run instance")
+		return resp.Response.InstanceIdSet, errInfo
 	}
 	return resp.Response.InstanceIdSet, nil
 }
